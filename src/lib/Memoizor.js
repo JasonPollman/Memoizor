@@ -1,7 +1,14 @@
+/**
+ * Contains the Memoizor base class.
+ * @file
+ */
+
 import _ from 'lodash';
 import debuggr from 'debug';
 import { md5Async, stringifyAsync } from 'json-normalize';
 import { EventEmitter } from 'events';
+import StorageController from './storage-controllers/StorageController';
+import LocalStorageController from './storage-controllers/Local';
 
 const debug = debuggr('memoizor');
 
@@ -18,62 +25,13 @@ const ps = Symbol();
 const BACKSLASHES_TO_FORWARD_SLASHES = /\\/g;
 
 /**
- * The default store save function.
- * @param {string} key The unique key for the arguments signature.
- * @param {any} value The value produced by the memoized function,
- * given the "signature" defined by "key".
- * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
- * @returns {undefined}
- */
-function defaultSaveHandler(key, value, memorizr, done) {
-  const container = memorizr;
-  container.localStorage[key] = value;
-  if (_.isFunction(done)) done(null, value);
-  return value;
-}
-
-/**
- * The default store retrieve function.
- * @param {string} key The unique key for the arguments signature.
- * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
- * @returns {undefined}
- */
-function defaultRetrieveHandler(key, memorizr, done) {
-  if (_.isFunction(done)) done(null, memorizr.localStorage[key]);
-  return memorizr.localStorage[key];
-}
-
-/**
- * The default store delete function.
- * @param {string} key The unique key for the arguments signature.
- * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
- * @returns {undefined}
- */
-function defaultDeleteHandler(key, memorizr, done) {
-  const container = memorizr;
-  if (container.localStorage[key]) container.localStorage[key] = undefined;
-  if (_.isFunction(done)) done(null);
-}
-
-/**
- * The default store empty function.
- * @param {string} key The unique key for the arguments signature.
- * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
- * @returns {undefined}
- */
-function defaultEmptyHandler(memorizr, done) {
-  const container = memorizr;
-  container[ps].localStorage = {};
-  if (_.isFunction(done)) done(null);
-}
-
-/**
  * Wraps the store save function to account for timeouts.
  * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
- * @param {function} save The "onSave" function.
+ * @param {StorageController} controller The current StorageController instance associated
+ * with the given memoizor instance.
  * @returns {function} The wrapped onSave function.
  */
-function wrapSave(memoizor, saver) {
+function wrapSave(memoizor, controller) {
   return (key, ...args) => {
     const mem = memoizor;
     const { ttl, storeKeyFrequencies, maxRecords, LRUPercentPadding, LRUHistoryFactor } = mem;
@@ -132,17 +90,18 @@ function wrapSave(memoizor, saver) {
       debug('Current records count is: %s', mem.storeCurrentRecords);
     }
 
-    return saver(key, ...args);
+    return controller.save(key, ...args);
   };
 }
 
 /**
  * Wraps the store retrieve function to account for max lookups.
  * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
- * @param {function} retriever The "onRetrieve" function.
+ * @param {StorageController} controller The current StorageController instance associated
+ * with the given memoizor instance.
  * @returns {function} The wrapped onRetrieve function.
  */
-function wrapRetrieve(memoizor, retriever) {
+function wrapRetrieve(memoizor, controller) {
   return (key, ...args) => {
     const mem = memoizor;
     const { storeKeyFrequencies, maxRecords } = mem;
@@ -155,17 +114,18 @@ function wrapRetrieve(memoizor, retriever) {
       storeKeyFrequencies[key].lastAccess = Date.now();
     }
 
-    return retriever(key, ...args);
+    return controller.retrieve(key, ...args);
   };
 }
 
 /**
  * Wraps the store delete function to account for max lookups.
  * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
- * @param {function} deleter The "onDelete" function.
+ * @param {StorageController} controller The current StorageController instance associated
+ * with the given memoizor instance.
  * @returns {function} The wrapped onDelete function.
  */
-function wrapDelete(memoizor, deleter) {
+function wrapDelete(memoizor, controller) {
   return (key, ...args) => {
     const mem = memoizor;
     const { storeKeyFrequencies, maxRecords } = mem;
@@ -178,17 +138,18 @@ function wrapDelete(memoizor, deleter) {
       mem[ps].storeCurrentRecords--;
     }
 
-    return deleter(key, ...args);
+    return controller.delete(key, ...args);
   };
 }
 
 /**
  * Wraps the store empty function to account for max lookups.
  * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
- * @param {function} emptier The "onEmpty" function.
+ * @param {StorageController} controller The current StorageController instance associated
+ * with the given memoizor instance.
  * @returns {function} The wrapped onEmpty function.
  */
-function wrapEmpty(memoizor, emptier) {
+function wrapEmpty(memoizor, controller) {
   return (...args) => {
     const mem = memoizor;
 
@@ -201,10 +162,25 @@ function wrapEmpty(memoizor, emptier) {
       mem[ps].storeCurrentRecords = 0;
     }
 
-    return emptier(...args);
+    return controller.empty(...args);
   };
 }
 
+/**
+ * Properties to ignore decorating the Memoize instance with.
+ * @type {Array<string>}
+ */
+const IGNORED_PROPERTIES = ['wrapStorageController', 'resolveArguments', 'debug'];
+
+/**
+ * Used to spread into Object.defineProperties.
+ * @type {object<boolean>}
+ */
+const descriptor = {
+  configurable: false,
+  writable: false,
+  enumerable: true,
+};
 
 /**
  * Decorates the given target function with the associated Memoizor
@@ -227,10 +203,18 @@ function decorate(RootPrototype, memoizor, target, current) {
   // memoized function.
   properties.forEach((property) => {
     const method = prototype[property];
-    if (_.isFunction(method) && !decorated[property]) decorated[property] = method.bind(memoizor);
+    if (_.isFunction(method) && !decorated[property] && !_.includes(IGNORED_PROPERTIES, property)) {
+      Object.defineProperty(decorated, property, {
+        ...descriptor,
+        value: method.bind(memoizor),
+      });
+    }
   });
 
   if (prototype !== RootPrototype) decorate(RootPrototype, memoizor, decorated, prototype);
+
+  // Add a connection to the memoizor instance.
+  Object.defineProperty(decorated, 'memoizor', { ...descriptor, value: memoizor });
   return decorated;
 }
 
@@ -276,7 +260,7 @@ export default class Memoizor extends EventEmitter {
     // Validate resolver(s?) option
     const resolvers = options.resolvers = options.resolvers || options.resolver;
 
-    if (resolvers !== undefined
+    if (!_.isUndefined(resolvers)
       && ((!_.isFunction(resolvers) && !Array.isArray(resolvers))
         || (Array.isArray(resolvers) && !resolvers.every(fn => _.isFunction(fn))))) {
       throw new TypeError('The "resolver/resolvers" option must be a function or an array of functions!');
@@ -287,15 +271,13 @@ export default class Memoizor extends EventEmitter {
       configurable: false,
       enumerable: false,
       value: {
-        /**
-         * Functions for handling storing and deleting memoized results
-         */
-        onSave: (...args) => defaultSaveHandler(...args, this),
-        onRetrieve: (...args) => defaultRetrieveHandler(...args, this),
-        onEmpty: (...args) => defaultEmptyHandler(...args, this),
-        onDelete: (...args) => defaultDeleteHandler(...args, this),
+        ...options,
 
-        ...options, // Override with user functions
+        /**
+         * The storage mechanism for storing data.
+         * @type {StorageController}
+         */
+        storage: null,
 
         /**
          * The target function's name for debugging and caching prefixes.
@@ -323,12 +305,6 @@ export default class Memoizor extends EventEmitter {
         callable: null,
 
         /**
-         * Local storage, which is used by the default storage handlers.
-         * @type {object<any>}
-         */
-        localStorage: {},
-
-        /**
          * The number of times each store item has been retrieved.
          * @type {object<number>}
          */
@@ -350,6 +326,11 @@ export default class Memoizor extends EventEmitter {
           main: require.main.filename.replace(BACKSLASHES_TO_FORWARD_SLASHES, '/'),
           function: this.name,
         },
+
+        onSave: null,
+        onRetrieve: null,
+        onDelete: null,
+        onEmpty: null,
       },
     });
 
@@ -362,6 +343,9 @@ export default class Memoizor extends EventEmitter {
       });
     });
 
+    // Setup the storage controller
+    this.setStorageController(options.storageController || new LocalStorageController());
+
     // Create the memoized target
     const memoized = this.create();
 
@@ -369,55 +353,36 @@ export default class Memoizor extends EventEmitter {
       if (this.callable === this.target) return target(...args);
       return memoized(...args);
     });
+  }
 
+  /**
+   * Wraps (mixes in) added functionality to the storage controller functions and
+   * assigns the wrapped functions to the Memoizor instance.
+   * @param {StorageController} controller The StorageController instance to wrap.
+   * @returns {Memoizor} The current Memoizor instance.
+   */
+  wrapStorageController(controller) {
     // Wrap handler functions
-    this[ps].onSave = wrapSave(this, this[ps].onSave);
-    this[ps].onRetrieve = wrapRetrieve(this, this[ps].onRetrieve);
-    this[ps].onDelete = wrapDelete(this, this[ps].onDelete);
-    this[ps].onEmpty = wrapEmpty(this, this[ps].onEmpty);
+    this[ps].onSave = wrapSave(this, controller);
+    this[ps].onRetrieve = wrapRetrieve(this, controller);
+    this[ps].onDelete = wrapDelete(this, controller);
+    this[ps].onEmpty = wrapEmpty(this, controller);
+    return this;
   }
 
   /**
-   * Sets the value of the "save" handler function.
-   * @param {function} handler The store save function to execute when a memoize result is saved.
-   * @memberof Memoizor
+   * Sets the current StorageController.
+   * @param {StorageController} controller The StorageController instance to wrap.
+   * @returns {Memoizor} The current Memoizor instance.
    */
-  set onSave(handler) {
-    if (!_.isFunction(handler)) throw new Error('Value of Memoizor#onSave must be a function!');
-    this[ps].onSave = wrapSave(this, handler);
-  }
+  setStorageController(controller) {
+    if (!(controller instanceof StorageController)) {
+      throw new TypeError('The storage controller must be an instance of StorageController');
+    }
 
-  /**
-   * Sets the value of the "retrieve" handler function.
-   * @param {function} handler The store retrieve function
-   * to execute when a memoize result is retrieved.
-   * @memberof Memoizor
-   */
-  set onRetrieve(handler) {
-    if (!_.isFunction(handler)) throw new Error('Value of Memoizor#onRetrieve must be a function!');
-    this[ps].onRetrieve = wrapRetrieve(this, handler);
-  }
-
-  /**
-   * Sets the value of the "delete" handler function.
-   * @param {function} handler The store delete function
-   * to execute when a memoize result is deleted.
-   * @memberof Memoizor
-   */
-  set onDelete(handler) {
-    if (!_.isFunction(handler)) throw new Error('Value of Memoizor#onDelete must be a function!');
-    this[ps].onDelete = wrapDelete(handler);
-  }
-
-  /**
-   * Sets the value of the "empty" handler function.
-   * @param {function} handler The store empty function
-   * to execute when a memoize result is emptied.
-   * @memberof Memoizor
-   */
-  set onEmpty(handler) {
-    if (!_.isFunction(handler)) throw new Error('Value of Memoizor#onEmpty must be a function!');
-    this[ps].onEmpty = wrapEmpty(handler);
+    this[ps].storage = controller;
+    this.wrapStorageController(controller);
+    return this;
   }
 
   /**
@@ -458,8 +423,11 @@ export default class Memoizor extends EventEmitter {
    */
   unmemoize() {
     if (this.memoized !== this.callable) return this;
+
     this.debug({ method: 'unmemoize', function: this.name });
     this.emit('unmemoize');
+    this.emit('disable');
+
     this[ps].callable = this.target;
     return this;
   }
@@ -471,10 +439,31 @@ export default class Memoizor extends EventEmitter {
    */
   memoize() {
     if (this.memoized === this.callable) return this;
+
     this.debug({ method: 'memoize', function: this.name });
     this.emit('memoize');
+    this.emit('enable');
+
     this[ps].callable = this.memoized;
     return this;
+  }
+
+  /**
+   * Alias for memoize.
+   * @returns {function}
+   * @memberof Memoizor
+   */
+  get enable() {
+    return this.memoize;
+  }
+
+  /**
+   * Alias for unmemoize.
+   * @returns {function}
+   * @memberof Memoizor
+   */
+  get disable() {
+    return this.unmemoize;
   }
 
   /**

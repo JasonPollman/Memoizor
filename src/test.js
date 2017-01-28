@@ -10,7 +10,6 @@ function test(...args) {
 }
 
 
-
 (async () => {
   const memoized = memoizor.sync.all({ fibonacci, test }, { resolvers: [String, Boolean] });
 
@@ -29,14 +28,14 @@ function test(...args) {
   console.log(memoized.test(1, 2, 3, 4));
   console.log(memoized.test(1, 2, 3, 4));
 
-  memoized.test.unmemoize();
+  memoized.test.disable();
   console.log(memoized.test(1, 2, 3, 4));
   console.log(memoized.test(1, 2, 3, 4));
   console.log(memoized.test(1, 2, 3, 4));
   console.log(memoized.test(1, 2, 3, 4));
   console.log(memoized.test(1, 2, 3, 4));
 
-  memoized.test.memoize();
+  memoized.test.enable();
   console.log(memoized.test(1, 2, 3, 4));
   console.log(memoized.test(1, 2, 3, 4));
   console.log(memoized.test(1, 2, 3, 4));

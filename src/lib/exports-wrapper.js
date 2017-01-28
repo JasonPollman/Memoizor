@@ -1,4 +1,10 @@
+/**
+ * Formats the exports and adds the .all functionality.
+ * @file
+ */
+
 import _ from 'lodash';
+import * as controllers from './storage-controllers';
 import MemoizorPromise from './MemoizorPromise';
 import MemoizorCallback from './MemoizorCallback';
 import MemoizorSync from './MemoizorSync';
@@ -26,7 +32,7 @@ export function callback(target, options) {
 }
 
 /**
- * Memoizes regular ole' syncronous functions.
+ * Memoizes regular ole' synchronous functions.
  * @param {function} target The target function to memoize.
  * @param {object} options Various options for setting up the memoization.
  * @returns {function} The memoized function.
@@ -50,19 +56,25 @@ const mappingFn = (item) => {
   return _[Array.isArray(item) ? 'map' : 'mapValues'];
 };
 
-// Memoizes all given functions...
-promise.all = (targets, options) =>
-  mappingFn(targets)(targets, target => promise(target, options));
+// Memoizes an array or plain object of functions...
+promise.all = function memoizeAllPromiseFunctions(targets, options) {
+  return mappingFn(targets)(targets, target => promise(target, options));
+};
 
-callback.all = (targets, options) =>
-  mappingFn(targets)(targets, target => callback(target, options));
+callback.all = function memoizeAllCallbackFunctions(targets, options) {
+  return mappingFn(targets)(targets, target => callback(target, options));
+};
 
-sync.all = (targets, options) =>
-  mappingFn(targets)(targets, target => sync(target, options));
+sync.all = function memoizeAllSyncFunctions(targets, options) {
+  return mappingFn(targets)(targets, target => sync(target, options));
+}
 
 // Aliases
 export const async = promise;
 export const cb = callback;
+
+// Export all storage controllers
+Object.assign(exports, controllers);
 
 // Export sync version by default
 export default sync;

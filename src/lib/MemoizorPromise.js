@@ -1,3 +1,8 @@
+/**
+ * Contains the MemoizorPromise class, which memoizes functions that use promises.
+ * @file
+ */
+
 import Memoizor from './Memoizor';
 
 /**
@@ -14,21 +19,23 @@ export default class MemoizorPromise extends Memoizor {
    */
   create() {
     return async (...args) => {
-      const key = await this.key(...this.resolveArguments(args));
-      const cached = await this.get(key);
+      const resolvedArguments = this.resolveArguments(args);
+      const key = await this.key(...resolvedArguments);
+      const cached = await this.get(key, resolvedArguments);
       if (cached !== undefined) return cached;
-      return await this.save(key, await this.target(...args));
+      return await this.save(key, await this.target(...args), resolvedArguments);
     };
   }
 
   /**
    * Gets a cached value.
    * @param {string} key The key of the assoicated value to get.
+   * @param {Array<any>} args The arguments signature used for storage and to generate the key.
    * @returns {any} The cached value, if it exists.
    * @memberof MemorizrPromise
    */
-  async get(key) {
-    const cached = await this.onRetrieve(key, this);
+  async get(key, args) {
+    const cached = await this.onRetrieve(key, args, this);
     this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== undefined });
     return cached;
   }
@@ -36,22 +43,25 @@ export default class MemoizorPromise extends Memoizor {
   /**
    * Stores a cached value.
    * @param {string} key The key of the assoicated value to save.
+   * @param {any} value The execution results of the target (memoized) function.
+   * @param {Array<any>} args The arguments signature used for storage and to generate the key.
    * @returns {any} The cached value, if it exists.
    * @memberof MemorizrPromise
    */
-  async save(key, value) {
-    await this.onSave(key, value, this);
+  async save(key, value, args) {
+    await this.onSave(key, value, args, this);
     return value;
   }
 
   /**
    * Deletes a cached value.
    * @param {string} key The key of the assoicated value to delete.
+   * @param {Array<any>} args The arguments signature used for storage and to generate the key.
    * @returns {Memoizor} The current Memoizor instance.
    * @memberof MemorizrPromise
    */
-  async delete(key) {
-    await this.onDelete(key, this);
+  async delete(key, args) {
+    await this.onDelete(key, args, this);
     return this;
   }
 

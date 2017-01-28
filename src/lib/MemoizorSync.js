@@ -1,8 +1,14 @@
+/**
+ * Contains the MemoizorSync class, which memoizes synchronous functions
+ * that directly return values.
+ * @file
+ */
+
 import { md5Sync, stringifySync } from 'json-normalize';
 import Memoizor from './Memoizor';
 
 /**
- * Memoizes regular syncronous functions.
+ * Memoizes regular synchronous functions.
  * @class MemorizrSync
  * @extends {Memoizor}
  * @export
@@ -16,13 +22,14 @@ export default class MemoizorSync extends Memoizor {
   create() {
     return (...args) => {
       // Look for cached value
-      const key = this.key(...this.resolveArguments(args));
-      const cached = this.get(key);
+      const resolvedArguments = this.resolveArguments(args);
+      const key = this.key(...resolvedArguments);
+      const cached = this.get(key, resolvedArguments);
       if (cached !== undefined) return cached;
 
       // No cache, execute the function and store the results
       const results = this.target(...args);
-      this.save(key, results);
+      this.save(key, results, resolvedArguments);
       return results;
     };
   }
@@ -44,11 +51,12 @@ export default class MemoizorSync extends Memoizor {
   /**
    * Gets a cached value.
    * @param {string} key The key of the assoicated value to get.
+   * @param {Array<any>} args The arguments signature used for storage and to generate the key.
    * @returns {any} The cached value, if it exists.
    * @memberof MemorizrSync
    */
-  get(key) {
-    const cached = this.onRetrieve(key, this);
+  get(key, args) {
+    const cached = this.onRetrieve(key, args, this);
     this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== undefined });
     return cached;
   }
@@ -56,22 +64,25 @@ export default class MemoizorSync extends Memoizor {
   /**
    * Stores a cached value.
    * @param {string} key The key of the assoicated value to save.
+   * @param {any} value The execution results of the target (memoized) function.
+   * @param {Array<any>} args The arguments signature used for storage and to generate the key.
    * @returns {any} The cached value, if it exists.
    * @memberof MemorizrSync
    */
-  save(key, value) {
-    this.onSave(key, value, this);
+  save(key, value, args) {
+    this.onSave(key, value, args, this);
     return value;
   }
 
   /**
    * Deletes a cached value.
    * @param {string} key The key of the assoicated value to delete.
+   * @param {Array<any>} args The arguments signature used for storage and to generate the key.
    * @returns {Memoizor} The current Memoizor instance.
    * @memberof MemorizrSync
    */
-  delete(key) {
-    this.onDelete(key, this);
+  delete(key, args) {
+    this.onDelete(key, args, this);
     return this;
   }
 

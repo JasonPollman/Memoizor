@@ -1,6 +1,7 @@
 import _ from 'lodash';
-import { md5Async } from 'json-normalize';
 import debuggr from 'debug';
+
+import { md5Async, stringifyAsync } from 'json-normalize';
 import { EventEmitter } from 'events';
 
 const debug = debuggr('memoizor');
@@ -25,9 +26,11 @@ const BACKSLASHES_TO_FORWARD_SLASHES = /\\/g;
  * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
  * @returns {undefined}
  */
-function defaultSaveHandler(key, value, memorizr) {
+function defaultSaveHandler(key, value, memorizr, done) {
   const container = memorizr;
   container.localStorage[key] = value;
+  if (_.isFunction(done)) done(null, value);
+  return value;
 }
 
 /**
@@ -36,7 +39,8 @@ function defaultSaveHandler(key, value, memorizr) {
  * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
  * @returns {undefined}
  */
-function defaultRetrieveHandler(key, memorizr) {
+function defaultRetrieveHandler(key, memorizr, done) {
+  if (_.isFunction(done)) done(null, memorizr.localStorage[key]);
   return memorizr.localStorage[key];
 }
 
@@ -46,9 +50,10 @@ function defaultRetrieveHandler(key, memorizr) {
  * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
  * @returns {undefined}
  */
-function defaultDeleteHandler(key, memorizr) {
+function defaultDeleteHandler(key, memorizr, done) {
   const container = memorizr;
   if (container.localStorage[key]) container.localStorage[key] = undefined;
+  if (_.isFunction(done)) done(null);
 }
 
 /**
@@ -57,9 +62,147 @@ function defaultDeleteHandler(key, memorizr) {
  * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
  * @returns {undefined}
  */
-function defaultEmptyHandler(memorizr) {
+function defaultEmptyHandler(memorizr, done) {
   const container = memorizr;
   container[ps].localStorage = {};
+  if (_.isFunction(done)) done(null);
+}
+
+/**
+ * Wraps the store save function to account for timeouts.
+ * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
+ * @param {function} save The "onSave" function.
+ * @returns {function} The wrapped onSave function.
+ */
+function wrapSave(memoizor, saver) {
+  return (key, ...args) => {
+    const mem = memoizor;
+    const { ttl, storeKeyFrequencies, maxRecords, LRUPercentPadding, LRUHistoryFactor } = mem;
+
+    mem.debug({ method: 'save', function: mem.name, key });
+    mem.emit('save', key, ...args);
+
+    // Delete stored item after the TTL has expired
+    if (_.isNumber(ttl)) {
+      setTimeout(() => {
+        debug('Timeout triggered for key %s', key);
+        mem.delete(key);
+      }, ttl);
+    }
+
+    // If the number of max allowable records is set, adjust if overflowing
+    if (_.isNumber(maxRecords)) {
+      if (!storeKeyFrequencies[key]) {
+        storeKeyFrequencies[key] = {
+          key,
+          frequency: 0,
+          lastAccess: Number.MAX_VALUE,
+        };
+      }
+
+      // Increment total records and accesses for the current key.
+      mem[ps].storeCurrentRecords++;
+
+      // Stored records overflow the total allowable
+      if (mem.storeCurrentRecords > maxRecords) {
+        const frequencyList = _.toArray(storeKeyFrequencies);
+        const percentPad = LRUPercentPadding || 10;
+        const count = frequencyList.length;
+
+        // Determine the LRU store items.
+        // If the value of LRUPercentPadding > 1, we'll add more space to allow for additional calls
+        // without invoking all this logic again.
+        let lrus = frequencyList
+          .sort((a, b) => (b.lastAccess - a.lastAccess))
+          .slice(0, count / (LRUHistoryFactor || 2))
+          .sort((a, b) => (a.frequency - b.frequency));
+
+        const deleteCount = Math.ceil((percentPad * 0.01) * lrus.length);
+        lrus = lrus.slice(0, deleteCount);
+
+        debug('Store too large (exceeds %s), reducing store by %s%% (%s record(s))', mem.maxRecords, percentPad, deleteCount);
+        lrus.forEach((lru) => {
+          // Delete the store item, decrement the total records
+          debug('Deleting LRU value with key: %s (%s lookup(s))', lru.key, lru.frequency);
+          delete storeKeyFrequencies[lru.key];
+          mem[ps].storeCurrentRecords--;
+          mem.delete(lru.key);
+        });
+      }
+
+      debug('Current records count is: %s', mem.storeCurrentRecords);
+    }
+
+    return saver(key, ...args);
+  };
+}
+
+/**
+ * Wraps the store retrieve function to account for max lookups.
+ * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
+ * @param {function} retriever The "onRetrieve" function.
+ * @returns {function} The wrapped onRetrieve function.
+ */
+function wrapRetrieve(memoizor, retriever) {
+  return (key, ...args) => {
+    const mem = memoizor;
+    const { storeKeyFrequencies, maxRecords } = mem;
+
+    mem.emit('retrieve', key, ...args);
+    mem.debug({ method: 'retrieve', function: mem.name, key });
+
+    if (_.isNumber(maxRecords) && storeKeyFrequencies[key]) {
+      storeKeyFrequencies[key].frequency++;
+      storeKeyFrequencies[key].lastAccess = Date.now();
+    }
+
+    return retriever(key, ...args);
+  };
+}
+
+/**
+ * Wraps the store delete function to account for max lookups.
+ * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
+ * @param {function} deleter The "onDelete" function.
+ * @returns {function} The wrapped onDelete function.
+ */
+function wrapDelete(memoizor, deleter) {
+  return (key, ...args) => {
+    const mem = memoizor;
+    const { storeKeyFrequencies, maxRecords } = mem;
+
+    mem.debug({ method: 'delete', function: mem.name, key });
+    mem.emit('delete', key, ...args);
+
+    if (_.isNumber(maxRecords) && storeKeyFrequencies[key]) {
+      delete storeKeyFrequencies[key];
+      mem[ps].storeCurrentRecords--;
+    }
+
+    return deleter(key, ...args);
+  };
+}
+
+/**
+ * Wraps the store empty function to account for max lookups.
+ * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
+ * @param {function} emptier The "onEmpty" function.
+ * @returns {function} The wrapped onEmpty function.
+ */
+function wrapEmpty(memoizor, emptier) {
+  return (...args) => {
+    const mem = memoizor;
+
+    mem.debug({ method: 'empty', function: mem.name });
+    mem.emit('empty', ...args);
+
+    if (_.isNumber(mem.maxRecords)) {
+      mem[ps].storeKeyFrequencies = {};
+      mem[ps].storeCurrentRecords = 0;
+    }
+
+    return emptier(...args);
+  };
 }
 
 
@@ -93,6 +236,15 @@ function decorate(memoizor, target) {
  */
 export default class Memoizor extends EventEmitter {
   /**
+   * Used by JSONNormalize to replace functions with their stringified value (for caching).
+   * @type {function}
+   */
+  static FUNCTION_KEY_REPLACER = (key, val) => {
+    if (!_.isFunction(val)) return val;
+    return val.toString();
+  };
+
+  /**
    * Creates an instance of Memoizor.
    * @param {function} target The target function to memoize.
    * @param {object} opts Contains various settings for memoizing the given target.
@@ -105,6 +257,14 @@ export default class Memoizor extends EventEmitter {
     if (!_.isFunction(target)) throw new TypeError('Cannot memoize non-function!');
     const options = _.isPlainObject(opts) ? opts : {};
 
+    // Ensure any ttl/maxRecords options are numeric
+    if (options.ttl) options.ttl = parseInt(options.ttl, 10) || undefined;
+    if (options.maxRecords) options.maxRecords = parseInt(options.maxRecords, 10) || undefined;
+
+    // Clamp min values for these options
+    if (_.isNumber(options.ttl)) options.ttl = Math.max(60, options.ttl);
+    if (_.isNumber(options.maxRecords)) options.maxRecords = Math.max(0, options.maxRecords);
+
     // Protected properties
     Object.defineProperty(this, ps, {
       configurable: false,
@@ -114,9 +274,9 @@ export default class Memoizor extends EventEmitter {
          * Functions for handling storing and deleting memoized results
          */
         onSave: (...args) => defaultSaveHandler(...args, this),
+        onRetrieve: (...args) => defaultRetrieveHandler(...args, this),
         onEmpty: (...args) => defaultEmptyHandler(...args, this),
         onDelete: (...args) => defaultDeleteHandler(...args, this),
-        onRetrieve: (...args) => defaultRetrieveHandler(...args, this),
 
         ...options, // Override with user functions
 
@@ -152,6 +312,18 @@ export default class Memoizor extends EventEmitter {
         localStorage: {},
 
         /**
+         * The number of times each store item has been retrieved.
+         * @type {object<number>}
+         */
+        storeKeyFrequencies: {},
+
+        /**
+         * The number of total store records.
+         * @type {number}
+         */
+        storeCurrentRecords: 0,
+
+        /**
          * An object, that when serialized will uniquely identify this function.
          * This is used when generating the store keys, but is lax enough to work distributedly.
          * @type {object<string>}
@@ -175,6 +347,12 @@ export default class Memoizor extends EventEmitter {
 
     // Create the memoized target
     this[ps].memoized = this[ps].callable = decorate(this, this.create());
+
+    // Wrap handler functions
+    this[ps].onSave = wrapSave(this, this[ps].onSave);
+    this[ps].onRetrieve = wrapRetrieve(this, this[ps].onRetrieve);
+    this[ps].onDelete = wrapDelete(this, this[ps].onDelete);
+    this[ps].onEmpty = wrapEmpty(this, this[ps].onEmpty);
   }
 
   /**
@@ -184,7 +362,7 @@ export default class Memoizor extends EventEmitter {
    */
   set onSave(handler) {
     if (!_.isFunction(handler)) throw new Error('Value of Memoizor#onSave must be a function!');
-    this[ps].onSave = handler;
+    this[ps].onSave = wrapSave(this, handler);
   }
 
   /**
@@ -195,7 +373,7 @@ export default class Memoizor extends EventEmitter {
    */
   set onRetrieve(handler) {
     if (!_.isFunction(handler)) throw new Error('Value of Memoizor#onRetrieve must be a function!');
-    this[ps].onRetrieve = handler;
+    this[ps].onRetrieve = wrapRetrieve(this, handler);
   }
 
   /**
@@ -206,7 +384,7 @@ export default class Memoizor extends EventEmitter {
    */
   set onDelete(handler) {
     if (!_.isFunction(handler)) throw new Error('Value of Memoizor#onDelete must be a function!');
-    this[ps].onDelete = handler;
+    this[ps].onDelete = wrapDelete(handler);
   }
 
   /**
@@ -217,7 +395,7 @@ export default class Memoizor extends EventEmitter {
    */
   set onEmpty(handler) {
     if (!_.isFunction(handler)) throw new Error('Value of Memoizor#onEmpty must be a function!');
-    this[ps].onEmpty = handler;
+    this[ps].onEmpty = wrapEmpty(handler);
   }
 
   /**
@@ -226,8 +404,11 @@ export default class Memoizor extends EventEmitter {
    * @returns {string} The string md5 key for the given argument signature.
    * @memberof Memoizor
    */
-  async key(signature) {
-    return await md5Async({ prefix: this.uniqueIdentifier, signature });
+  async key(...args) {
+    return await md5Async({
+      prefix: this.uniqueIdentifier,
+      signature: stringifyAsync(args, Memoizor.FUNCTION_KEY_REPLACER),
+    });
   }
 
   /**
@@ -248,6 +429,7 @@ export default class Memoizor extends EventEmitter {
   unmemoize() {
     if (this.memoized !== this.callable) return this;
     this.debug({ method: 'unmemoize', function: this.name });
+    this.emit('unmemoize');
     this[ps].callable = this.target;
     return this;
   }
@@ -260,6 +442,7 @@ export default class Memoizor extends EventEmitter {
   memoize() {
     if (this.memoized === this.callable) return this;
     this.debug({ method: 'memoize', function: this.name });
+    this.emit('memoize');
     this[ps].callable = this.memoized;
     return this;
   }

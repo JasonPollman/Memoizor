@@ -1,4 +1,3 @@
-import { stringifyAsync } from 'json-normalize';
 import Memoizor from './Memoizor';
 
 /**
@@ -11,69 +10,58 @@ export default class MemoizorPromise extends Memoizor {
   /**
    * Creates the memoized function.
    * @returns {function} The memoized function.
-   * @memberof MemorizrSync
+   * @memberof MemorizrPromise
    */
   create() {
     return async (...args) => {
-      const cached = await this.get(args);
+      const key = await this.key(...args);
+      const cached = await this.get(key);
       if (cached !== undefined) return cached;
-      return await this.save(args, await this.target(...args));
+      return await this.save(key, await this.target(...args));
     };
   }
 
   /**
    * Gets a cached value.
-   * @param {Array<any>} argumentsArray The arguments array to get the associated value of.
+   * @param {string} key The key of the assoicated value to get.
    * @returns {any} The cached value, if it exists.
-   * @memberof MemorizrSync
+   * @memberof MemorizrPromise
    */
-  async get(argumentsArray) {
-    const signature = await stringifyAsync(argumentsArray);
-    const key = await this.key(signature);
+  async get(key) {
     const cached = await this.onRetrieve(key, this);
-
-    this.debug({ method: 'get', function: this.name, signature, cached: cached !== undefined });
+    this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== undefined });
     return cached;
   }
 
   /**
    * Stores a cached value.
-   * @param {Array<any>} argumentsArray The arguments array to store the associated value of.
+   * @param {string} key The key of the assoicated value to save.
    * @returns {any} The cached value, if it exists.
-   * @memberof MemorizrSync
+   * @memberof MemorizrPromise
    */
-  async save(argumentsArray, value) {
-    const signature = await stringifyAsync(argumentsArray);
-    const key = await this.key(signature);
+  async save(key, value) {
     await this.onSave(key, value, this);
-
-    this.debug({ method: 'set', function: this.name, signature });
     return value;
   }
 
   /**
    * Deletes a cached value.
-   * @param {Array<any>} argumentsArray The arguments array associated with
-   * a cached value to delete.
+   * @param {string} key The key of the assoicated value to delete.
    * @returns {Memoizor} The current Memoizor instance.
    * @memberof MemorizrPromise
    */
-  async delete(argumentsArray) {
-    const signature = await stringifyAsync(argumentsArray);
-    const key = await this.key(signature);
+  async delete(key) {
     await this.onDelete(key, this);
-    this.debug({ method: 'delete', function: this.name, signature });
     return this;
   }
 
   /**
    * Empties all stored values for the memoized function associated with this Memoizor object.
    * @returns {Memoizor} The current Memoizor instance.
-   * @memberof MemorizrSync
+   * @memberof MemorizrPromise
    */
   async empty() {
     await this.onEmpty();
-    this.debug({ method: 'empty', function: this.name });
     return this;
   }
 }

@@ -7,7 +7,7 @@ import Memoizor from './Memoizor';
  * @extends {Memoizor}
  * @export
  */
-export default class MemorizrSync extends Memoizor {
+export default class MemoizorSync extends Memoizor {
   /**
    * Creates the memoized function.
    * @returns {function} The memoized function.
@@ -16,12 +16,13 @@ export default class MemorizrSync extends Memoizor {
   create() {
     return (...args) => {
       // Look for cached value
-      const cached = this.get(args);
+      const key = this.key(...args);
+      const cached = this.get(key);
       if (cached !== undefined) return cached;
 
       // No cache, execute the function and store the results
       const results = this.target(...args);
-      this.set(args, results);
+      this.save(key, results);
       return results;
     };
   }
@@ -30,53 +31,47 @@ export default class MemorizrSync extends Memoizor {
    * Returns the key for the given argument list signature string.
    * @param {Array<any>} signature An argument list signature string.
    * @returns {string} The string md5 key for the given argument signature.
-   * @memberof Memoizor
+   * @memberof MemoizorSync
    * @override
    */
-  key(signature) {
-    return md5Sync({ prefix: this.uniqueIdentifier, signature });
+  key(...args) {
+    return md5Sync({
+      prefix: this.uniqueIdentifier,
+      signature: stringifySync(args, MemoizorSync.FUNCTION_KEY_REPLACER),
+    });
   }
 
   /**
    * Gets a cached value.
-   * @param {Array<any>} argumentsArray The arguments array to get the associated value of.
+   * @param {string} key The key of the assoicated value to get.
    * @returns {any} The cached value, if it exists.
    * @memberof MemorizrSync
    */
-  get(argumentsArray) {
-    const signature = stringifySync(argumentsArray);
-    const key = this.key(signature);
+  get(key) {
     const cached = this.onRetrieve(key, this);
-    this.debug({ method: 'get', function: this.name, signature, cached: cached !== undefined });
+    this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== undefined });
     return cached;
   }
 
   /**
    * Stores a cached value.
-   * @param {Array<any>} argumentsArray The arguments array to store the associated value of.
+   * @param {string} key The key of the assoicated value to save.
    * @returns {any} The cached value, if it exists.
    * @memberof MemorizrSync
    */
-  set(argumentsArray, value) {
-    const signature = stringifySync(argumentsArray);
-    const key = this.key(signature);
+  save(key, value) {
     this.onSave(key, value, this);
-    this.debug({ method: 'set', function: this.name, signature });
     return value;
   }
 
   /**
    * Deletes a cached value.
-   * @param {Array<any>} argumentsArray The arguments array associated with
-   * a cached value to delete.
+   * @param {string} key The key of the assoicated value to delete.
    * @returns {Memoizor} The current Memoizor instance.
    * @memberof MemorizrSync
    */
-  delete(argumentsArray) {
-    const signature = stringifySync(argumentsArray);
-    const key = this.key(signature);
+  delete(key) {
     this.onDelete(key, this);
-    this.debug({ method: 'delete', function: this.name, signature });
     return this;
   }
 
@@ -87,7 +82,6 @@ export default class MemorizrSync extends Memoizor {
    */
   empty() {
     this.onEmpty();
-    this.debug({ method: 'empty', function: this.name });
     return this;
   }
 }

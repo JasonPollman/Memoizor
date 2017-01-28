@@ -195,6 +195,7 @@ function wrapEmpty(memoizor, emptier) {
 
     mem.debug({ method: 'empty', function: mem.name });
     mem.emit('empty', ...args);
+    mem.emit('clear', ...args);
 
     if (_.isNumber(mem.maxRecords)) {
       mem[ps].storeKeyFrequencies = {};
@@ -418,6 +419,14 @@ export default class Memoizor extends EventEmitter {
   set onEmpty(handler) {
     if (!_.isFunction(handler)) throw new Error('Value of Memoizor#onEmpty must be a function!');
     this[ps].onEmpty = wrapEmpty(handler);
+  }
+
+  /**
+   * Alias for Memoizor#empty.
+   * @param {...any} args The arguments to pass through to Memoizor#empty().
+   */
+  clear(...args) {
+    return this.empty(...args);
   }
 
   /**

@@ -15,10 +15,7 @@ export default class MemoizorPromise extends Memoizor {
    */
   create() {
     return async (...args) => {
-      const key = await this.key(...(_.isNumber(this.maxArgs)
-        ? args.slice(0, this.maxArgs)
-        : args));
-
+      const key = await this.key(...this.resolveArguments(args));
       const cached = await this.get(key);
       if (cached !== undefined) return cached;
       return await this.save(key, await this.target(...args));

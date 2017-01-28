@@ -17,7 +17,7 @@ export default class MemoizorSync extends Memoizor {
   create() {
     return (...args) => {
       // Look for cached value
-      const key = this.key(...(_.isNumber(this.maxArgs) ? args.slice(0, this.maxArgs) : args));
+      const key = this.key(...this.resolveArguments(args));
       const cached = this.get(key);
       if (cached !== undefined) return cached;
 

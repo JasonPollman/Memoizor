@@ -12,7 +12,7 @@ function test(...args) {
 
 
 (async () => {
-  const memoized = memoizor.sync.all({ fibonacci, test }, { maxArgs: 1 });
+  const memoized = memoizor.sync.all({ fibonacci, test }, { resolvers: [String, Boolean] });
 
   console.log(memoized.test);
 

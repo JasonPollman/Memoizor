@@ -39,9 +39,7 @@ export default class MemoizorCallback extends MemoizorPromise {
         const callback = params.splice(callbackIndex, 1)[0];
 
         // Look for cached value
-        const key = await this.key(...(_.isNumber(this.maxArgs)
-          ? params.slice(0, this.maxArgs)
-          : params));
+        const key = await this.key(...this.resolveArguments(args));
 
         const cached = await this.get(key);
         if (cached !== undefined) return cached;

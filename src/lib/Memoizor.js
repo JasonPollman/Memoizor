@@ -259,7 +259,7 @@ export default class Memoizor extends EventEmitter {
   constructor(target, opts) {
     super();
 
-    // Validate arguments
+    // Validate target argument
     if (!_.isFunction(target)) throw new TypeError('Cannot memoize non-function!');
     const options = _.isPlainObject(opts) ? _.clone(opts) : {};
 
@@ -272,6 +272,15 @@ export default class Memoizor extends EventEmitter {
     if (_.isNumber(options.ttl)) options.ttl = Math.max(60, options.ttl);
     if (_.isNumber(options.maxRecords)) options.maxRecords = Math.max(0, options.maxRecords);
     if (_.isNumber(options.maxArgs)) options.maxArgs = Math.max(1, options.maxArgs);
+
+    // Validate resolver(s?) option
+    const resolvers = options.resolvers = options.resolvers || options.resolver;
+
+    if (resolvers !== undefined
+      && ((!_.isFunction(resolvers) && !Array.isArray(resolvers))
+        || (Array.isArray(resolvers) && !resolvers.every(fn => _.isFunction(fn))))) {
+      throw new TypeError('The "resolver/resolvers" option must be a function or an array of functions!');
+    }
 
     // Protected properties
     Object.defineProperty(this, ps, {
@@ -458,6 +467,27 @@ export default class Memoizor extends EventEmitter {
     this.emit('memoize');
     this[ps].callable = this.memoized;
     return this;
+  }
+
+  /**
+   * Used to resolve the maximum arguments length option and calls the options.resolvers
+   * resolver functions.
+   * @param {Array<any>} args The arguments to process.
+   * @returns {Array<any>} The processed arguments.
+   */
+  resolveArguments(args) {
+    const slicedArgs = (_.isNumber(this.maxArgs) ? args.slice(0, this.maxArgs) : args);
+    let resolvedArgs = slicedArgs;
+
+    if (this.resolvers) {
+      resolvedArgs = slicedArgs.map((arg, idx) => {
+        if (_.isFunction(this.resolvers)) return this.resolvers(arg, idx, this);
+        if (this.resolvers[idx]) return this.resolvers[idx](arg, idx, this);
+        return arg;
+      });
+    }
+
+    return resolvedArgs;
   }
 }
 

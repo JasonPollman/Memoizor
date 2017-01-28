@@ -39,7 +39,10 @@ export default class MemoizorCallback extends MemoizorPromise {
         const callback = params.splice(callbackIndex, 1)[0];
 
         // Look for cached value
-        const key = await this.key(...params);
+        const key = await this.key(...(_.isNumber(this.maxArgs)
+          ? params.slice(0, this.maxArgs)
+          : params));
+
         const cached = await this.get(key);
         if (cached !== undefined) return cached;
 
@@ -107,6 +110,19 @@ export default class MemoizorCallback extends MemoizorPromise {
   async empty(done) {
     this.onEmpty(done);
     return this;
+  }
+
+  /**
+   * Returns the target to its "natural", unmemoized state.
+   * @param {boolean=} [empty=false] If true, the cache store will be emptied after unmemoizing.
+   * @param {function} done A callback for completion.
+   * @returns {Memoizor} The current Memoizor instance.
+   * @memberof MemoizorPromise
+   * @override
+   */
+  async unmemoize(empty = false, done) {
+    if (empty) await this.empty(done);
+    return super.unmemoize();
   }
 }
 

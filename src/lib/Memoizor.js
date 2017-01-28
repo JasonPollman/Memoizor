@@ -208,23 +208,29 @@ function wrapEmpty(memoizor, emptier) {
 
 /**
  * Decorates the given target function with the associated Memoizor
- * object's bound prototype functions.
+ * object's bound prototype functions (walks the prototype chain until Memoizor.prototype if found).
+ * This gives us the magic of applying the functions of the Memoizor objects to the memoizing
+ * function itself without having to do something like: memoizedFunction.memoizor[method], but
+ * instead memoizedFunction[method].
+ * @param {object} RootPrototype The top level prototype to stop recursing at (i.e. Memoizor).
  * @param {Memoizor} memoizor The Memoizor object associated with the target function.
  * @param {function} target The memoized function to decorate.
+ * @param {object} current The current prototype we're "borrowing" functions from.
  * @returns {function} The decorated function.
  */
-function decorate(memoizor, target) {
+function decorate(RootPrototype, memoizor, target, current) {
   const decorated = target;
-  const prototype = memoizor.constructor.prototype;
+  const prototype = Object.getPrototypeOf(current || memoizor);
   const properties = Object.getOwnPropertyNames(prototype);
 
   // Iterate over the Memoizor prototype and append the functions to the
   // memoized function.
   properties.forEach((property) => {
     const method = prototype[property];
-    if (_.isFunction(method)) decorated[property] = method.bind(memoizor);
+    if (_.isFunction(method) && !decorated[property]) decorated[property] = method.bind(memoizor);
   });
 
+  if (prototype !== RootPrototype) decorate(RootPrototype, memoizor, decorated, prototype);
   return decorated;
 }
 
@@ -255,15 +261,17 @@ export default class Memoizor extends EventEmitter {
 
     // Validate arguments
     if (!_.isFunction(target)) throw new TypeError('Cannot memoize non-function!');
-    const options = _.isPlainObject(opts) ? opts : {};
+    const options = _.isPlainObject(opts) ? _.clone(opts) : {};
 
-    // Ensure any ttl/maxRecords options are numeric
-    if (options.ttl) options.ttl = parseInt(options.ttl, 10) || undefined;
-    if (options.maxRecords) options.maxRecords = parseInt(options.maxRecords, 10) || undefined;
+    // Ensure any ttl/maxRecords/length options are numeric
+    ['ttl', 'maxRecords', 'maxArgs'].forEach((prop) => {
+      if (options[prop]) options[prop] = parseInt(options[prop], 10) || undefined;
+    });
 
     // Clamp min values for these options
     if (_.isNumber(options.ttl)) options.ttl = Math.max(60, options.ttl);
     if (_.isNumber(options.maxRecords)) options.maxRecords = Math.max(0, options.maxRecords);
+    if (_.isNumber(options.maxArgs)) options.maxArgs = Math.max(1, options.maxArgs);
 
     // Protected properties
     Object.defineProperty(this, ps, {
@@ -346,7 +354,12 @@ export default class Memoizor extends EventEmitter {
     });
 
     // Create the memoized target
-    this[ps].memoized = this[ps].callable = decorate(this, this.create());
+    const memoized = this.create();
+
+    this[ps].memoized = this[ps].callable = decorate(Memoizor.prototype, this, (...args) => {
+      if (this.callable === this.target) return target(...args);
+      return memoized(...args);
+    });
 
     // Wrap handler functions
     this[ps].onSave = wrapSave(this, this[ps].onSave);

@@ -1,3 +1,4 @@
+import _ from 'lodash';
 import Memoizor from './Memoizor';
 
 /**
@@ -14,7 +15,10 @@ export default class MemoizorPromise extends Memoizor {
    */
   create() {
     return async (...args) => {
-      const key = await this.key(...args);
+      const key = await this.key(...(_.isNumber(this.maxArgs)
+        ? args.slice(0, this.maxArgs)
+        : args));
+
       const cached = await this.get(key);
       if (cached !== undefined) return cached;
       return await this.save(key, await this.target(...args));
@@ -63,6 +67,18 @@ export default class MemoizorPromise extends Memoizor {
   async empty() {
     await this.onEmpty();
     return this;
+  }
+
+  /**
+   * Returns the target to its "natural", unmemoized state.
+   * @param {boolean=} [empty=false] If true, the cache store will be emptied after unmemoizing.
+   * @returns {Memoizor} The current Memoizor instance.
+   * @memberof MemoizorPromise
+   * @override
+   */
+  async unmemoize(empty = false) {
+    if (empty) await this.empty();
+    return super.unmemoize();
   }
 }
 

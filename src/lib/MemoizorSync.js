@@ -1,3 +1,4 @@
+import _ from 'lodash';
 import { md5Sync, stringifySync } from 'json-normalize';
 import Memoizor from './Memoizor';
 
@@ -16,7 +17,7 @@ export default class MemoizorSync extends Memoizor {
   create() {
     return (...args) => {
       // Look for cached value
-      const key = this.key(...args);
+      const key = this.key(...(_.isNumber(this.maxArgs) ? args.slice(0, this.maxArgs) : args));
       const cached = this.get(key);
       if (cached !== undefined) return cached;
 
@@ -83,6 +84,18 @@ export default class MemoizorSync extends Memoizor {
   empty() {
     this.onEmpty();
     return this;
+  }
+
+  /**
+   * Returns the target to its "natural", unmemoized state.
+   * @param {boolean=} [empty=false] If true, the cache store will be emptied after unmemoizing.
+   * @returns {Memoizor} The current Memoizor instance.
+   * @memberof MemoizorPromise
+   * @override
+   */
+  async unmemoize(empty = false) {
+    if (empty) this.empty();
+    return super.unmemoize();
   }
 }
 

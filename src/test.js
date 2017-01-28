@@ -12,7 +12,9 @@ function test(...args) {
 
 
 (async () => {
-  const memoized = memoizor.sync.all({ fibonacci, test });
+  const memoized = memoizor.sync.all({ fibonacci, test }, { maxArgs: 1 });
+
+  console.log(memoized.test);
 
   console.log(memoized.test(1, 2, 3, 4));
   console.log(memoized.test(1, 2, 3, 4));
@@ -23,6 +25,20 @@ function test(...args) {
 
   memoized.test.delete(memoized.test.key(1, 2, 3, 4));
 
+  console.log(memoized.test(1, 2, 3, 4));
+  console.log(memoized.test(1, 2, 3, 4));
+  console.log(memoized.test(1, 2, 3, 4));
+
+  memoized.test.unmemoize();
+  console.log(memoized.test(1, 2, 3, 4));
+  console.log(memoized.test(1, 2, 3, 4));
+  console.log(memoized.test(1, 2, 3, 4));
+  console.log(memoized.test(1, 2, 3, 4));
+  console.log(memoized.test(1, 2, 3, 4));
+
+  memoized.test.memoize();
+  console.log(memoized.test(1, 2, 3, 4));
+  console.log(memoized.test(1, 2, 3, 4));
   console.log(memoized.test(1, 2, 3, 4));
   console.log(memoized.test(1, 2, 3, 4));
   console.log(memoized.test(1, 2, 3, 4));

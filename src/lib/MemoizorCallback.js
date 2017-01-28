@@ -123,4 +123,3 @@ export default class MemoizorCallback extends MemoizorPromise {
     return super.unmemoize();
   }
 }
-

@@ -1,5 +1,4 @@
 import _ from 'lodash';
-
 import MemoizorPromise from './MemoizorPromise';
 import MemoizorCallback from './MemoizorCallback';
 import MemoizorSync from './MemoizorSync';

@@ -1,4 +1,3 @@
-import _ from 'lodash';
 import { md5Sync, stringifySync } from 'json-normalize';
 import Memoizor from './Memoizor';
 
@@ -98,4 +97,3 @@ export default class MemoizorSync extends Memoizor {
     return super.unmemoize();
   }
 }
-

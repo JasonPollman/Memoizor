@@ -1,4 +1,3 @@
-import _ from 'lodash';
 import Memoizor from './Memoizor';
 
 /**
@@ -78,4 +77,3 @@ export default class MemoizorPromise extends Memoizor {
     return super.unmemoize();
   }
 }
-

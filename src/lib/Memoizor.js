@@ -1,6 +1,5 @@
 import _ from 'lodash';
 import debuggr from 'debug';
-
 import { md5Async, stringifyAsync } from 'json-normalize';
 import { EventEmitter } from 'events';
 
@@ -499,4 +498,3 @@ export default class Memoizor extends EventEmitter {
     return resolvedArgs;
   }
 }
-

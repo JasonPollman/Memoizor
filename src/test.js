@@ -11,9 +11,13 @@ function test(...args) {
 
 
 (async () => {
-  const memoized = memoizor.sync.all({ fibonacci, test }, { resolvers: [String, Boolean] });
+  const controller = new memoizor.FileStorageController('./test.txt');
+  await controller.init();
 
-  console.log(memoized.test);
+  const memoized = memoizor.sync.all({ fibonacci, test }, {
+    maxArgs: 1,
+    storageController: controller,
+  });
 
   console.log(memoized.test(1, 2, 3, 4));
   console.log(memoized.test(1, 2, 3, 4));

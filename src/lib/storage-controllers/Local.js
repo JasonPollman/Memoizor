@@ -13,7 +13,6 @@ import StorageController from './StorageController';
  */
 const ps = Symbol();
 
-
 /**
  * A process-local, in-memory storage controller that uses a plain object to store memoized
  * execution results.

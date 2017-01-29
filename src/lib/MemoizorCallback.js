@@ -19,12 +19,12 @@ export default class MemoizorCallback extends MemoizorPromise {
    * @param {object} opts Contains various settings for memoizing the given target.
    * @memberof MemoizorCallback
    */
-  constructor(target, options) {
+  constructor(target, options, type = 'callback') {
     super(target, {
       ...options,
       // Validate the callback index is a number
       callbackIndex: parseInt(options.callbackIndex, 10) || undefined,
-    });
+    }, type);
   }
 
   /**
@@ -45,14 +45,12 @@ export default class MemoizorCallback extends MemoizorPromise {
 
         // Look for cached value
         const resolvedArguments = this.resolveArguments(args);
-        const key = await this.key(...resolvedArguments);
-
-        const cached = await this.get(key, resolvedArguments);
+        const cached = await this.get(resolvedArguments);
         if (cached !== undefined) return cached;
 
         const wrappedCallback = async (err, results) => {
           if (err) return callback(err);
-          await this.save(key, results, resolvedArguments);
+          await this.save(results, resolvedArguments);
           return callback(null, results);
         };
 
@@ -67,13 +65,13 @@ export default class MemoizorCallback extends MemoizorPromise {
 
   /**
    * Gets a cached value.
-   * @param {string} key The key of the assoicated value to get.
    * @param {Array<any>} args The arguments signature used for storage and to generate the key.
    * @param {function} done A callback for completion.
    * @returns {Memoizor} The current Memoizor instance.
    * @memberof MemorizrSync
    */
-  get(key, args, done) {
+  async get(args, done) {
+    const key = await this.key(args);
     this.onRetrieve(key, args, this, (err, cached) => {
       this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== undefined });
       return done(err, cached);
@@ -84,28 +82,28 @@ export default class MemoizorCallback extends MemoizorPromise {
 
   /**
    * Stores a cached value.
-   * @param {string} key The key of the assoicated value to save.
    * @param {any} value The execution results of the target (memoized) function.
    * @param {Array<any>} args The arguments signature used for storage and to generate the key.
    * @param {function} done A callback for completion.
    * @returns {Memoizor} The current Memoizor instance.
    * @memberof MemorizrCallback
    */
-  async save(key, value, args, done) {
-    this.onSave(key, value, args, this, done);
+  async save(value, args, done) {
+    const key = await this.key(args);
+    this.onSave(key, value, args, done);
     return this;
   }
 
   /**
    * Deletes a cached value.
-   * @param {string} key The key of the assoicated value to delete.
    * @param {Array<any>} args The arguments signature used for storage and to generate the key.
    * @param {function} done A callback for completion.
    * @returns {Memoizor} The current Memoizor instance.
    * @memberof MemorizrCallback
    */
-  async delete(key, args, done) {
-    this.onDelete(key, args, this, done);
+  async delete(args, done) {
+    const key = await this.key(args);
+    this.onDelete(key, args, done);
     return this;
   }
 

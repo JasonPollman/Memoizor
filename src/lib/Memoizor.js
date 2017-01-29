@@ -32,12 +32,12 @@ const BACKSLASHES_TO_FORWARD_SLASHES = /\\/g;
  * @returns {function} The wrapped onSave function.
  */
 function wrapSave(memoizor, controller) {
-  return (key, ...args) => {
+  return (key, value, args, done) => {
     const mem = memoizor;
     const { ttl, storeKeyFrequencies, maxRecords, LRUPercentPadding, LRUHistoryFactor } = mem;
 
     mem.debug({ method: 'save', function: mem.name, key });
-    mem.emit('save', key, ...args);
+    mem.emit('save', key, value, args);
 
     // Delete stored item after the TTL has expired
     if (_.isNumber(ttl)) {
@@ -90,7 +90,9 @@ function wrapSave(memoizor, controller) {
       debug('Current records count is: %s', mem.storeCurrentRecords);
     }
 
-    return controller.save(key, ...args);
+    const results = controller.save(key, value, args, memoizor);
+    if (_.isFunction(done)) done(null, results);
+    return results;
   };
 }
 
@@ -102,11 +104,11 @@ function wrapSave(memoizor, controller) {
  * @returns {function} The wrapped onRetrieve function.
  */
 function wrapRetrieve(memoizor, controller) {
-  return (key, ...args) => {
+  return (key, args, done) => {
     const mem = memoizor;
     const { storeKeyFrequencies, maxRecords } = mem;
 
-    mem.emit('retrieve', key, ...args);
+    mem.emit('retrieve', key, args);
     mem.debug({ method: 'retrieve', function: mem.name, key });
 
     if (_.isNumber(maxRecords) && storeKeyFrequencies[key]) {
@@ -114,7 +116,9 @@ function wrapRetrieve(memoizor, controller) {
       storeKeyFrequencies[key].lastAccess = Date.now();
     }
 
-    return controller.retrieve(key, ...args);
+    const results = controller.retrieve(key, args, memoizor);
+    if (_.isFunction(done)) done(null, results);
+    return results;
   };
 }
 
@@ -126,7 +130,7 @@ function wrapRetrieve(memoizor, controller) {
  * @returns {function} The wrapped onDelete function.
  */
 function wrapDelete(memoizor, controller) {
-  return (key, ...args) => {
+  return (key, args, done) => {
     const mem = memoizor;
     const { storeKeyFrequencies, maxRecords } = mem;
 
@@ -138,7 +142,9 @@ function wrapDelete(memoizor, controller) {
       mem[ps].storeCurrentRecords--;
     }
 
-    return controller.delete(key, ...args);
+    const results = controller.delete(key, args, memoizor);
+    if (_.isFunction(done)) done(null, results);
+    return results;
   };
 }
 
@@ -150,19 +156,21 @@ function wrapDelete(memoizor, controller) {
  * @returns {function} The wrapped onEmpty function.
  */
 function wrapEmpty(memoizor, controller) {
-  return (...args) => {
+  return (done) => {
     const mem = memoizor;
 
     mem.debug({ method: 'empty', function: mem.name });
-    mem.emit('empty', ...args);
-    mem.emit('clear', ...args);
+    mem.emit('empty');
+    mem.emit('clear');
 
     if (_.isNumber(mem.maxRecords)) {
       mem[ps].storeKeyFrequencies = {};
       mem[ps].storeCurrentRecords = 0;
     }
 
-    return controller.empty(...args);
+    const results = controller.empty(memoizor);
+    if (_.isFunction(done)) done(null, results);
+    return results;
   };
 }
 
@@ -213,8 +221,13 @@ function decorate(RootPrototype, memoizor, target, current) {
 
   if (prototype !== RootPrototype) decorate(RootPrototype, memoizor, decorated, prototype);
 
-  // Add a connection to the memoizor instance.
-  Object.defineProperty(decorated, 'memoizor', { ...descriptor, value: memoizor });
+  Object.defineProperties(decorated, {
+    // The type of the function
+    type: { ...descriptor, value: memoizor.type },
+    // Add a connection to the memoizor instance.
+    memoizor: { ...descriptor, value: memoizor },
+  });
+
   return decorated;
 }
 
@@ -238,10 +251,12 @@ export default class Memoizor extends EventEmitter {
    * Creates an instance of Memoizor.
    * @param {function} target The target function to memoize.
    * @param {object} opts Contains various settings for memoizing the given target.
+   * @param {string} type The type of the target function (callback, promise, or sync).
    * @memberof Memoizor
    */
-  constructor(target, opts) {
+  constructor(target, opts, type) {
     super();
+    if (!_.isString(type)) throw new TypeError('Missing type');
 
     // Validate target argument
     if (!_.isFunction(target)) throw new TypeError('Cannot memoize non-function!');
@@ -272,6 +287,12 @@ export default class Memoizor extends EventEmitter {
       enumerable: false,
       value: {
         ...options,
+
+        /**
+         * The type of the target function (callback, promise, or sync).
+         * @type {string}
+         */
+        type,
 
         /**
          * The storage mechanism for storing data.
@@ -394,12 +415,12 @@ export default class Memoizor extends EventEmitter {
   }
 
   /**
-   * Returns the key for the given argument list signature string.
-   * @param {Array<any>} signature An argument list signature string.
+   * Returns the key for the given argument list.
+   * @param {Array<any>} args The argument list signature array.
    * @returns {string} The string md5 key for the given argument signature.
    * @memberof Memoizor
    */
-  async key(...args) {
+  async key(args) {
     return await md5Async({
       prefix: this.uniqueIdentifier,
       signature: stringifyAsync(args, Memoizor.FUNCTION_KEY_REPLACER),

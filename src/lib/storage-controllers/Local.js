@@ -35,55 +35,42 @@ export default class LocalStorageController extends StorageController {
   /**
    * The LocalStorageController save implementation.
    * @param {string} key The unique key for the arguments signature.
-   * @param {any} value The value produced by the memoized function,
-   * @param {Array<any>} args The arguments signature used for storage and to generate the key.
-   * given the "signature" defined by "key".
-   * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
+   * @param {any} value The value produced by the memoized function.
    * @returns {undefined}
    * @override
    */
-  save(key, value, args, memorizr, done) {
+  save(key, value) {
     this[ps].store[key] = value;
-    if (_.isFunction(done)) done(null, value);
     return value;
   }
 
   /**
    * The LocalStorageController retrieve implementation.
    * @param {string} key The unique key for the arguments signature.
-   * @param {Array<any>} args The arguments signature used for storage and to generate the key.
-   * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
    * @returns {undefined}
    * @override
    */
-  retrieve(key, args, memorizr, done) {
-    if (_.isFunction(done)) done(null, this[ps].store[key]);
+  retrieve(key) {
     return this[ps].store[key];
   }
 
   /**
    * The LocalStorageController delete implementation.
    * @param {string} key The unique key for the arguments signature.
-   * @param {Array<any>} args The arguments signature used for storage and to generate the key.
-   * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
    * @returns {undefined}
    * @override
    */
-  delete(key, args, memorizr, done) {
+  delete(key) {
     if (this[ps].store[key]) this[ps].store[key] = undefined;
-    if (_.isFunction(done)) done(null);
   }
 
   /**
    * The LocalStorageController empty implementation.
    * @param {string} key The unique key for the arguments signature.
-   * @param {Array<any>} args The arguments signature used for storage and to generate the key.
-   * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
    * @returns {undefined}
    * @override
    */
-  empty(memorizr, done) {
+  empty() {
     this[ps].store = {};
-    if (_.isFunction(done)) done(null);
   }
 }

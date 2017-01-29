@@ -6,7 +6,7 @@
 
 import { EOL as eol } from 'os';
 import nodefs from 'fs';
-import LocalStorageController from './Local';
+import LocalStorageController from './LocalStorageController';
 
 const fs = Promise.promisifyAll(nodefs);
 

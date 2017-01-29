@@ -4,7 +4,6 @@
  * @file
  */
 
-import _ from 'lodash';
 import StorageController from './StorageController';
 
 /**

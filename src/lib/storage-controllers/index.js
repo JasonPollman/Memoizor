@@ -3,7 +3,7 @@
  * @file
  */
 
-export LocalStorageController from './Local';
-export FileStorageController from './File';
-export FileStorageControllerSync from './FileSync';
+export LocalStorageController from './LocalStorageController';
+export FileStorageController from './FileStorageController';
+export FileStorageControllerSync from './FileStorageControllerSync';
 export StorageController from './StorageController';

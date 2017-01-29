@@ -11,37 +11,23 @@ function test(...args) {
 
 
 (async () => {
-  const memoized = memoizor.sync.all({ fibonacci, test }, { maxArgs: 1 });
+  const controller = new memoizor.FileStorageControllerSync('./test.txt');
+  await controller.init();
 
-  console.log(memoized);
+  const memoized = memoizor.sync(test, {
+    ignoreArgs: [0, 1, 2, 3, 4, 5],
+  });
 
-  console.log(memoized.test(1, 2, 3, 4));
-  console.log(memoized.test(1, 2, 3, 4));
-  console.log(memoized.test(1, 2, 3, 4));
+  const memoized2 = memoizor.sync(memoized, {
+    ignoreArgs: [0, 1, 2, 3, 4, 5],
+  });
 
-  console.log(memoized.fibonacci(40, 2, 3, 4));
-  console.log(memoized.fibonacci(40));
+  console.log(memoized, test);
 
-  memoized.test.delete(memoized.test.key(1, 2, 3, 4));
+  console.log(memoized(1, 2, 3, 4));
+  console.log(memoized2(1, 2, 3, 5));
 
-  console.log(memoized.test(1, 2, 3, 7));
-  console.log(memoized.test(1, 2, 3, 8));
-  console.log(memoized.test(1, 2, 3, 9));
-
-  memoized.test.disable();
-  console.log(memoized.test(1, 2, 3, 10));
-  console.log(memoized.test(1, 2, 3, 11));
-  console.log(memoized.test(1, 2, 3, 12));
-  console.log(memoized.test(1, 2, 3, 13));
-  console.log(memoized.test(1, 2, 3, 14));
-
-  memoized.test.enable();
-  console.log(memoized.test(1, 2, 3, 10));
-  console.log(memoized.test(1, 2, 3, 11));
-  console.log(memoized.test(1, 2, 3, 12));
-  console.log(memoized.test(1, 2, 3, 13));
-  console.log(memoized.test(1, 2, 3, 14));
-
-  memoized.test.delete([1, 2, 3, 10]);
-  // memoized.test.delete('6212967c508ad7143ce74d0d5926d3bf');
+  console.log(memoized(1, 2, 3, 4));
+  console.log(memoized2(1, 2, 3, 5));
+  
 })().catch(e => console.error(e.stack));

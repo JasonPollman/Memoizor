@@ -8,7 +8,7 @@ import debuggr from 'debug';
 import { md5Async, stringifyAsync } from 'json-normalize';
 import { EventEmitter } from 'events';
 import StorageController from './storage-controllers/StorageController';
-import LocalStorageController from './storage-controllers/Local';
+import LocalStorageController from './storage-controllers/LocalStorageController';
 
 const debug = debuggr('memoizor');
 
@@ -178,7 +178,7 @@ function wrapEmpty(memoizor, controller) {
  * Properties to ignore decorating the Memoize instance with.
  * @type {Array<string>}
  */
-const IGNORED_PROPERTIES = ['wrapStorageController', 'resolveArguments', 'debug'];
+const IGNORED_PROPERTIES = ['wrapStorageController', 'resolveArguments', 'validateOptions', 'debug'];
 
 /**
  * Used to spread into Object.defineProperties.
@@ -223,7 +223,7 @@ function decorate(RootPrototype, memoizor, target, current) {
 
   Object.defineProperties(decorated, {
     // The type of the function
-    type: { ...descriptor, value: memoizor.type },
+    mode: { ...descriptor, value: memoizor.mode },
     // Add a connection to the memoizor instance.
     memoizor: { ...descriptor, value: memoizor },
   });
@@ -251,48 +251,30 @@ export default class Memoizor extends EventEmitter {
    * Creates an instance of Memoizor.
    * @param {function} target The target function to memoize.
    * @param {object} opts Contains various settings for memoizing the given target.
-   * @param {string} type The type of the target function (callback, promise, or sync).
+   * @param {string} mode The mode of the target function (callback, promise, or sync).
    * @memberof Memoizor
    */
-  constructor(target, opts, type) {
+  constructor(target, opts, mode) {
+    if (!_.isString(mode)) throw new TypeError('Missing type');
     super();
-    if (!_.isString(type)) throw new TypeError('Missing type');
 
     // Validate target argument
     if (!_.isFunction(target)) throw new TypeError('Cannot memoize non-function!');
-    const options = _.isPlainObject(opts) ? _.clone(opts) : {};
-
-    // Ensure any ttl/maxRecords/length options are numeric
-    ['ttl', 'maxRecords', 'maxArgs'].forEach((prop) => {
-      if (options[prop]) options[prop] = parseInt(options[prop], 10) || undefined;
-    });
-
-    // Clamp min values for these options
-    if (_.isNumber(options.ttl)) options.ttl = Math.max(60, options.ttl);
-    if (_.isNumber(options.maxRecords)) options.maxRecords = Math.max(0, options.maxRecords);
-    if (_.isNumber(options.maxArgs)) options.maxArgs = Math.max(1, options.maxArgs);
-
-    // Validate resolver(s?) option
-    const resolvers = options.resolvers = options.resolvers || options.resolver;
-
-    if (!_.isUndefined(resolvers)
-      && ((!_.isFunction(resolvers) && !Array.isArray(resolvers))
-        || (Array.isArray(resolvers) && !resolvers.every(fn => _.isFunction(fn))))) {
-      throw new TypeError('The "resolver/resolvers" option must be a function or an array of functions!');
-    }
+    const options = this.validateOptions(_.isPlainObject(opts) ? opts : {});
 
     // Protected properties
     Object.defineProperty(this, ps, {
       configurable: false,
       enumerable: false,
       value: {
+        ignoreArgs: [],
         ...options,
 
         /**
          * The type of the target function (callback, promise, or sync).
          * @type {string}
          */
-        type,
+        mode,
 
         /**
          * The storage mechanism for storing data.
@@ -374,6 +356,68 @@ export default class Memoizor extends EventEmitter {
       if (this.callable === this.target) return target(...args);
       return memoized(...args);
     });
+  }
+
+  /**
+   * Clones the provided user options object and validates/mutates each option.
+   * @param {object} opts The options to validate/mutate.
+   * @returns {object} The sanitized options.
+   */
+  validateOptions(opts) {
+    const options = _.clone(opts);
+
+    // Ensure any ttl/maxRecords/length options are numeric
+    ['ttl', 'maxRecords', 'maxArgs'].forEach((prop) => {
+      if (options[prop]) options[prop] = parseInt(options[prop], 10) || undefined;
+    });
+
+    // Clamp min values for these options
+    if (_.isNumber(options.ttl)) options.ttl = Math.max(60, options.ttl);
+    if (_.isNumber(options.maxRecords)) options.maxRecords = Math.max(0, options.maxRecords);
+    if (_.isNumber(options.maxArgs)) options.maxArgs = Math.max(1, options.maxArgs);
+
+    // Validate options.ignoreArgs
+    if (!_.isUndefined(options.ignoreArgs)) {
+      if (!Array.isArray(options.ignoreArgs)) throw new TypeError('options.ignoreArgs must be an array!');
+
+      // Map the array to integer parsed values and validate that they're all numbers
+      options.ignoreArgs = options.ignoreArgs.map((val) => {
+        const numeric = parseInt(val, 10);
+        if (isNaN(numeric) || !isFinite(numeric)) throw new Error('Values of options.ignoreArgs must be finite numbers!');
+        return numeric;
+      });
+    }
+
+    // Validate resolver(s?) option
+    const resolvers = options.resolvers = options.resolvers || options.resolver;
+
+    if (!_.isUndefined(resolvers)
+      && ((!_.isFunction(resolvers) && !Array.isArray(resolvers))
+        || (Array.isArray(resolvers) && !resolvers.every(fn => _.isFunction(fn))))) {
+      throw new TypeError('The "resolver/resolvers" option must be a function or an array of functions!');
+    }
+
+    return options;
+  }
+
+  /**
+   * Set options on this Memoizor instance.
+   * @param {object} options An object with options to set.
+   * @returns {Memoizor} The current Memoizor instance.
+   */
+  setOptions(options) {
+    if (_.isPlainObject(options)) {
+      _.merge(this[ps], this.validateOptions({
+        maxArgs: options.maxArgs,
+        ignoreArgs: options.ignoreArgs,
+        ttl: options.ttl,
+        maxRecords: options.maxRecords,
+        resolver: options.resolver,
+        resolvers: options.resolvers,
+      }));
+    }
+
+    return this.memoized;
   }
 
   /**
@@ -497,6 +541,13 @@ export default class Memoizor extends EventEmitter {
     const slicedArgs = (_.isNumber(this.maxArgs) ? args.slice(0, this.maxArgs) : args);
     let resolvedArgs = slicedArgs;
 
+    // Strip out any ignored args
+    if (this.ignoreArgs) {
+      resolvedArgs = _.compact(resolvedArgs.map((arg, idx) =>
+        (_.includes(this.ignoreArgs, idx) ? null : arg)));
+    }
+
+    // Resolve any arguments using the given resolvers
     if (this.resolvers) {
       resolvedArgs = slicedArgs.map((arg, idx) => {
         if (_.isFunction(this.resolvers)) return this.resolvers(arg, idx, this);

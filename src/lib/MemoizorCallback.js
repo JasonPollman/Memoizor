@@ -17,14 +17,15 @@ export default class MemoizorCallback extends MemoizorPromise {
    * Creates an instance of MemoizorCallback.
    * @param {function} target The target function to memoize.
    * @param {object} opts Contains various settings for memoizing the given target.
+   * @param {string} mode The mode of the target function (callback, promise, or sync).
    * @memberof MemoizorCallback
    */
-  constructor(target, options, type = 'callback') {
+  constructor(target, options, mode = 'callback') {
     super(target, {
       ...options,
       // Validate the callback index is a number
       callbackIndex: parseInt(options.callbackIndex, 10) || undefined,
-    }, type);
+    }, mode);
   }
 
   /**

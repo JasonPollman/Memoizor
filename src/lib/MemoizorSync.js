@@ -18,11 +18,11 @@ export default class MemoizorSync extends Memoizor {
    * Creates an instance of MemoizorPromise.
    * @param {function} target The target function to memoize.
    * @param {object} options Options to use in memozing.
-   * @param {string} type The type of the target function (callback, promise, or sync).
+   * @param {string} mode The mode of the target function (callback, promise, or sync).
    * @memberof MemoizorPromise
    */
-  constructor(target, options, type = 'sync') {
-    super(target, options, type);
+  constructor(target, options, mode = 'sync') {
+    super(target, options, mode);
   }
 
   /**

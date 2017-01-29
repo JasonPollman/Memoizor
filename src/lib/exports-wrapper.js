@@ -9,6 +9,8 @@ import MemoizorPromise from './MemoizorPromise';
 import MemoizorCallback from './MemoizorCallback';
 import MemoizorSync from './MemoizorSync';
 
+const has = Object.prototype.hasOwnProperty;
+
 /**
  * Memoizes functions that return promises.
  * @param {function} target The target function to memoize.
@@ -17,6 +19,7 @@ import MemoizorSync from './MemoizorSync';
  * @export
  */
 export function promise(target, options) {
+  if (has.call(target, 'memoizor')) return target.setOptions(options);
   return new MemoizorPromise(target, options).memoized;
 }
 
@@ -28,6 +31,7 @@ export function promise(target, options) {
  * @export
  */
 export function callback(target, options) {
+  if (has.call(target, 'memoizor')) return target.setOptions(options);
   return new MemoizorCallback(target, options).memoized;
 }
 
@@ -39,6 +43,7 @@ export function callback(target, options) {
  * @export
  */
 export function sync(target, options) {
+  if (has.call(target, 'memoizor')) return target.setOptions(options);
   return new MemoizorSync(target, options).memoized;
 }
 
@@ -67,7 +72,7 @@ callback.all = function memoizeAllCallbackFunctions(targets, options) {
 
 sync.all = function memoizeAllSyncFunctions(targets, options) {
   return mappingFn(targets)(targets, target => sync(target, options));
-}
+};
 
 // Aliases
 export const async = promise;

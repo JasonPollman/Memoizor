@@ -61,7 +61,7 @@
   "dependencies": {
     "bluebird": "^3.4.7",
     "debug": "^2.6.0",
-    "json-normalize": "^1.1.0",
+    "json-normalize": "../JSONNormalize",
     "lodash": "^4.17.4"
   },
   "nyc": {

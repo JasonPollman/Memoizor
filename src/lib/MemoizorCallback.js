@@ -20,11 +20,16 @@ export default class MemoizorCallback extends MemoizorPromise {
    * @param {string} mode The mode of the target function (callback, promise, or sync).
    * @memberof MemoizorCallback
    */
-  constructor(target, options, mode = 'callback') {
+  constructor(target, options = {}, mode = 'callback') {
+    const opts = _.isPlainObject(options) ? options : {};
+
+    let callbackIndex = parseInt(opts.callbackIndex, 10);
+    if (isNaN(callbackIndex) || !isFinite(callbackIndex)) callbackIndex = undefined;
+
     super(target, {
-      ...options,
+      ...opts,
       // Validate the callback index is a number
-      callbackIndex: parseInt(options.callbackIndex, 10) || undefined,
+      callbackIndex,
     }, mode);
   }
 
@@ -37,7 +42,7 @@ export default class MemoizorCallback extends MemoizorPromise {
     return (...args) => {
       (async () => {
         const callbackIndex = _.isNumber(this.callbackIndex)
-        ? Math.min(this.callbackArgument, args.length)
+        ? Math.min(this.callbackIndex, args.length)
         : args.length - 1;
 
         // Get the list of params with the callback removed.
@@ -45,21 +50,20 @@ export default class MemoizorCallback extends MemoizorPromise {
         const callback = params.splice(callbackIndex, 1)[0];
 
         // Look for cached value
-        const resolvedArguments = this.resolveArguments(args);
-        const cached = await this.get(resolvedArguments);
-        if (cached !== undefined) return cached;
+        const resolvedArguments = this.resolveArguments(params);
 
-        const wrappedCallback = async (err, results) => {
-          if (err) return callback(err);
-          await this.save(results, resolvedArguments);
-          return callback(null, results);
+        const wrappedCallback = (...results) => {
+          if (results[0] instanceof Error) return callback(results[0]);
+          return this.save(results, resolvedArguments).then(() => callback(...results));
         };
 
-        // Splice in the wrapped, "new" callback
-        const argsCallbackSpliced = params.splice(callbackIndex, 0, wrappedCallback);
+        // Cache hit
+        const cached = await this.get(resolvedArguments);
+        if (cached !== undefined) return wrappedCallback(...cached);
 
+        params.splice(callbackIndex, 0, wrappedCallback);
         // No cache, execute the function and store the results
-        return this.target(...argsCallbackSpliced);
+        return this.target(...params);
       })();
     };
   }
@@ -72,13 +76,14 @@ export default class MemoizorCallback extends MemoizorPromise {
    * @memberof MemorizrSync
    */
   async get(args, done) {
-    const key = await this.key(args);
-    this.onRetrieve(key, args, this, (err, cached) => {
       this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== undefined });
-      return done(err, cached);
+    return await new Promise(async (resolve, reject) => {
+      const key = await this.key(args);
+      this.onRetrieve(key, args, (err, cached) => {
+        if (err) reject(err); else resolve(cached);
+        done(err, cached);
+      });
     });
-
-    return this;
   }
 
   /**
@@ -91,8 +96,8 @@ export default class MemoizorCallback extends MemoizorPromise {
    */
   async save(value, args, done) {
     const key = await this.key(args);
-    this.onSave(key, value, args, done);
-    return this;
+    await this.onSave(key, value, args, done);
+    return value;
   }
 
   /**
@@ -104,7 +109,7 @@ export default class MemoizorCallback extends MemoizorPromise {
    */
   async delete(args, done) {
     const key = await this.key(args);
-    this.onDelete(key, args, done);
+    await this.onDelete(key, args, done);
     return this;
   }
 
@@ -115,7 +120,7 @@ export default class MemoizorCallback extends MemoizorPromise {
    * @memberof MemorizrCallback
    */
   async empty(done) {
-    this.onEmpty(done);
+    await this.onEmpty(done);
     return this;
   }
 

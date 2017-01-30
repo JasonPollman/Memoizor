@@ -5,7 +5,8 @@
 
 import _ from 'lodash';
 import debuggr from 'debug';
-import { md5Async, stringifyAsync } from 'json-normalize';
+import crypto from 'crypto';
+import { stringifyAsync } from 'json-normalize';
 import { EventEmitter } from 'events';
 import StorageController from './storage-controllers/StorageController';
 import LocalStorageController from './storage-controllers/LocalStorageController';
@@ -25,6 +26,15 @@ const ps = Symbol();
 const BACKSLASHES_TO_FORWARD_SLASHES = /\\/g;
 
 /**
+ * Converts a process.hrtime tuple to nanoseconds.
+ * @param {Array<number>} hrtime A process.hrtime tuple.
+ * @returns {number} The hrtime value in nanoseconds.
+ */
+function toNanoseconds(hrtime) {
+  return (hrtime[0] * 1e9) + hrtime[1];
+}
+
+/**
  * Wraps the store save function to account for timeouts.
  * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
  * @param {StorageController} controller The current StorageController instance associated
@@ -34,18 +44,10 @@ const BACKSLASHES_TO_FORWARD_SLASHES = /\\/g;
 function wrapSave(memoizor, controller) {
   return (key, value, args, done) => {
     const mem = memoizor;
-    const { ttl, storeKeyFrequencies, maxRecords, LRUPercentPadding, LRUHistoryFactor } = mem;
+    const { storeKeyFrequencies, maxRecords, LRUPercentPadding, LRUHistoryFactor } = mem;
 
     mem.debug({ method: 'save', function: mem.name, key });
     mem.emit('save', key, value, args);
-
-    // Delete stored item after the TTL has expired
-    if (_.isNumber(ttl)) {
-      setTimeout(() => {
-        debug('Timeout triggered for key %s', key);
-        mem.delete(key);
-      }, ttl);
-    }
 
     // If the number of max allowable records is set, adjust if overflowing
     if (_.isNumber(maxRecords)) {
@@ -78,11 +80,9 @@ function wrapSave(memoizor, controller) {
         lrus = lrus.slice(0, deleteCount);
 
         debug('Store too large (exceeds %s), reducing store by %s%% (%s record(s))', mem.maxRecords, percentPad, deleteCount);
-        lrus.forEach((lru) => {
-          // Delete the store item, decrement the total records
+        // Delete the store item, decrement the total records
+        lrus.forEach(lru => {
           debug('Deleting LRU value with key: %s (%s lookup(s))', lru.key, lru.frequency);
-          delete storeKeyFrequencies[lru.key];
-          mem[ps].storeCurrentRecords--;
           mem.delete(lru.key);
         });
       }
@@ -91,6 +91,8 @@ function wrapSave(memoizor, controller) {
     }
 
     const results = controller.save(key, value, args, memoizor);
+    mem.storeCreated[key] = toNanoseconds(process.hrtime());
+
     if (_.isFunction(done)) done(null, results);
     return results;
   };
@@ -106,14 +108,24 @@ function wrapSave(memoizor, controller) {
 function wrapRetrieve(memoizor, controller) {
   return (key, args, done) => {
     const mem = memoizor;
-    const { storeKeyFrequencies, maxRecords } = mem;
+    const { ttl, storeKeyFrequencies, maxRecords } = mem;
 
     mem.emit('retrieve', key, args);
     mem.debug({ method: 'retrieve', function: mem.name, key });
 
     if (_.isNumber(maxRecords) && storeKeyFrequencies[key]) {
       storeKeyFrequencies[key].frequency++;
-      storeKeyFrequencies[key].lastAccess = Date.now();
+      storeKeyFrequencies[key].lastAccess = toNanoseconds(process.hrtime());
+    }
+
+    // Delete stored item after the TTL has expired
+    if (_.isNumber(ttl)) {
+      const created = memoizor.storeCreated[key];
+      if (created && toNanoseconds(process.hrtime()) - created > ttl) {
+        debug('Timeout exceeded for key %s, deleting...', key);
+        mem.delete(args, () => { if (_.isFunction(done)) done(null, undefined); });
+        return undefined;
+      }
     }
 
     const results = controller.retrieve(key, args, memoizor);
@@ -133,12 +145,13 @@ function wrapDelete(memoizor, controller) {
   return (key, args, done) => {
     const mem = memoizor;
     const { storeKeyFrequencies, maxRecords } = mem;
+    mem.storeCreated[key] = undefined;
 
     mem.debug({ method: 'delete', function: mem.name, key });
     mem.emit('delete', key, ...args);
 
     if (_.isNumber(maxRecords) && storeKeyFrequencies[key]) {
-      delete storeKeyFrequencies[key];
+      storeKeyFrequencies[key] = undefined;
       mem[ps].storeCurrentRecords--;
     }
 
@@ -239,15 +252,6 @@ function decorate(RootPrototype, memoizor, target, current) {
  */
 export default class Memoizor extends EventEmitter {
   /**
-   * Used by JSONNormalize to replace functions with their stringified value (for caching).
-   * @type {function}
-   */
-  static FUNCTION_KEY_REPLACER = (key, val) => {
-    if (!_.isFunction(val)) return val;
-    return val.toString();
-  };
-
-  /**
    * Creates an instance of Memoizor.
    * @param {function} target The target function to memoize.
    * @param {object} opts Contains various settings for memoizing the given target.
@@ -267,7 +271,7 @@ export default class Memoizor extends EventEmitter {
       configurable: false,
       enumerable: false,
       value: {
-        ignoreArgs: [],
+        ignoreArgs: null,
         ...options,
 
         /**
@@ -320,15 +324,21 @@ export default class Memoizor extends EventEmitter {
         storeCurrentRecords: 0,
 
         /**
+         * The time each store item was stored.
+         * @type {object<number>}
+         */
+        storeCreated: {},
+
+        /**
          * An object, that when serialized will uniquely identify this function.
          * This is used when generating the store keys, but is lax enough to work distributedly.
          * @type {object<string>}
          */
-        uniqueIdentifier: {
+        uid: JSON.stringify({
           application: 'MEMOIZOR',
           main: require.main.filename.replace(BACKSLASHES_TO_FORWARD_SLASHES, '/'),
           function: this.name,
-        },
+        }),
 
         onSave: null,
         onRetrieve: null,
@@ -359,6 +369,16 @@ export default class Memoizor extends EventEmitter {
   }
 
   /**
+   * Wrapper for the debug module for internal use.
+   * @param {object} object The object to debug.
+   * @returns {Memoizor} The current Memoizor instance.
+   */
+  debug(object) {
+    debug('%o', object);
+    return this;
+  }
+
+  /**
    * Clones the provided user options object and validates/mutates each option.
    * @param {object} opts The options to validate/mutate.
    * @returns {object} The sanitized options.
@@ -371,8 +391,8 @@ export default class Memoizor extends EventEmitter {
       if (options[prop]) options[prop] = parseInt(options[prop], 10) || undefined;
     });
 
-    // Clamp min values for these options
-    if (_.isNumber(options.ttl)) options.ttl = Math.max(60, options.ttl);
+    // Clamp min values for these options, convert ttl to nanoseconds
+    if (_.isNumber(options.ttl)) options.ttl = Math.max(60, options.ttl) * 1000000;
     if (_.isNumber(options.maxRecords)) options.maxRecords = Math.max(0, options.maxRecords);
     if (_.isNumber(options.maxArgs)) options.maxArgs = Math.max(1, options.maxArgs);
 
@@ -465,20 +485,10 @@ export default class Memoizor extends EventEmitter {
    * @memberof Memoizor
    */
   async key(args) {
-    return await md5Async({
-      prefix: this.uniqueIdentifier,
-      signature: stringifyAsync(args, Memoizor.FUNCTION_KEY_REPLACER),
-    });
-  }
-
-  /**
-   * Wrapper for the debug module for internal use.
-   * @param {object} object The object to debug.
-   * @returns {Memoizor} The current Memoizor instance.
-   */
-  debug(object) {
-    debug('%o', object);
-    return this;
+    const finalArgs = args.map(arg => (_.isFunction(arg) ? arg.toString() : arg));
+    return crypto.createHash('md5')
+      .update(`${this.uid}${await stringifyAsync(finalArgs)}`)
+      .digest('hex');
   }
 
   /**

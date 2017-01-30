@@ -1,4 +1,7 @@
-import * as memoizor from './lib/exports-wrapper';
+import memoizorSync, * as memoizor from './lib/exports-wrapper';
 
 Object.assign(exports, memoizor);
-export default memoizor;
+export default memoizorSync;
+
+Object.assign(exports.default, exports);
+

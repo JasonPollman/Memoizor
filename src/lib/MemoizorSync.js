@@ -4,7 +4,9 @@
  * @file
  */
 
-import { md5Sync, stringifySync } from 'json-normalize';
+import crypto from 'crypto';
+import _ from 'lodash';
+import { stringifySync } from 'json-normalize';
 import Memoizor from './Memoizor';
 
 /**
@@ -52,10 +54,10 @@ export default class MemoizorSync extends Memoizor {
    * @override
    */
   key(args) {
-    return md5Sync({
-      prefix: this.uniqueIdentifier,
-      signature: stringifySync(args, MemoizorSync.FUNCTION_KEY_REPLACER),
-    });
+    const finalArgs = args.map(arg => (_.isFunction(arg) ? arg.toString() : arg));
+    return crypto.createHash('md5')
+      .update(`${this.uid}${stringifySync(finalArgs)}`)
+      .digest('hex');
   }
 
   /**

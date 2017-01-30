@@ -6,6 +6,8 @@
 
 import StorageController from './StorageController';
 
+const has = Object.prototype.hasOwnProperty;
+
 /**
  * Used to privatize members of the LocalStorageController class.
  * @type {symbol}
@@ -49,8 +51,10 @@ export default class LocalStorageController extends StorageController {
    * @returns {undefined}
    * @override
    */
-  retrieve(key) {
-    return this[ps].store[key];
+  retrieve(key, args, memoizor) {
+    return has.call(this[ps].store, key)
+      ? this[ps].store[key]
+      : memoizor.NOT_CACHED;
   }
 
   /**
@@ -61,7 +65,7 @@ export default class LocalStorageController extends StorageController {
    */
   delete(key) {
     const stored = this[ps].store[key];
-    if (stored) this[ps].store[key] = undefined;
+    if (stored) delete this[ps].store[key];
     return stored;
   }
 

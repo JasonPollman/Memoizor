@@ -252,6 +252,12 @@ function decorate(RootPrototype, memoizor, target, current) {
  */
 export default class Memoizor extends EventEmitter {
   /**
+   * Used to indicate that a cache lookup was not cached so we can cache "undefined".
+   * @type {symbol}
+   */
+  static NOT_CACHED = Symbol('MEMOIZOR_NOT_CACHED');
+
+  /**
    * Creates an instance of Memoizor.
    * @param {function} target The target function to memoize.
    * @param {object} opts Contains various settings for memoizing the given target.
@@ -376,6 +382,14 @@ export default class Memoizor extends EventEmitter {
   }
 
   /**
+   * An outlet for the static verison.
+   * @returns {symbol} The "not cached" identifier.
+   */
+  get NOT_CACHED() {
+    return Memoizor.NOT_CACHED;
+  }
+
+  /**
    * Wrapper for the debug module for internal use.
    * @param {object} object The object to debug.
    * @returns {Memoizor} The current Memoizor instance.
@@ -469,7 +483,7 @@ export default class Memoizor extends EventEmitter {
    * @returns {any} A copy of the store contents.
    */
   storeContents() {
-    return this.store.contents();
+    return this[ps].storage.contents();
   }
 
   /**
@@ -517,6 +531,7 @@ export default class Memoizor extends EventEmitter {
    * @memberof Memoizor
    */
   async key(args) {
+    if (args.length === 0) return '';
     if (_.isFunction(this.keyGenerator)) return `${this.uid}${await this.keyGenerator(args)}`;
 
     const finalArgs = args.map(arg => (_.isFunction(arg) ? arg.toString() : arg));

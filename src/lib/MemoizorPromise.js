@@ -32,7 +32,7 @@ export default class MemoizorPromise extends Memoizor {
     return async (...args) => {
       const resolvedArguments = this.resolveArguments(args);
       const cached = await this.get(resolvedArguments);
-      if (cached !== undefined) return cached;
+      if (cached !== this.NOT_CACHED) return cached;
       return await this.save(await this.target(...args), resolvedArguments);
     };
   }

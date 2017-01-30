@@ -26,13 +26,7 @@ printResults('Time to memoized fibonacci function', toMilliseconds(process.hrtim
 
 start = process.hrtime();
 const fibMemoized1 = memoizor(n => (n <= 1 ? 1 : fibMemoized1(n - 1) + fibMemoized1(n - 2)), {
-  keyGenerator: (args) => {
-    let len = args.length;
-    let i = 0;
-    let id = String(args[i]);
-    while (--len) id += args[++i];
-    return id;
-  },
+  keyGenerator: 5,
 });
 
 printResults('Time to memoized fibonacci function', toMilliseconds(process.hrtime(start)));
@@ -44,6 +38,16 @@ const A1 = [1, 2, 3, 4];
 const A2 = { foo: { bar: { baz: [1, 2, 3, 4] } } };
 
 start = process.hrtime();
+for (let i = 0; i < ROUNDS; i++) fibMemoized2(N, A1, A2);
+end = process.hrtime(start);
+printResults('Total time (Memoizee, Primitive Mode)', toMilliseconds(end));
+
+start = process.hrtime();
+for (let i = 0; i < ROUNDS; i++) fibMemoized3(N, A1, A2);
+end = process.hrtime(start);
+printResults('Total time (Memoizee)', toMilliseconds(end));
+
+start = process.hrtime();
 for (let i = 0; i < ROUNDS; i++) fibMemoized(N, A1, A2);
 end = process.hrtime(start);
 printResults('Total time (Memoizor)', toMilliseconds(end));
@@ -53,12 +57,5 @@ for (let i = 0; i < ROUNDS; i++) fibMemoized1(N, A1, A2);
 end = process.hrtime(start);
 printResults('Total time (Memoizor, Primitive Mode)', toMilliseconds(end));
 
-start = process.hrtime();
-for (let i = 0; i < ROUNDS; i++) fibMemoized2(N, A1, A2);
-end = process.hrtime(start);
-printResults('Total time (Memoizee, Primitive Mode)', toMilliseconds(end));
-
-start = process.hrtime();
-for (let i = 0; i < ROUNDS; i++) fibMemoized3(N, A1, A2);
-end = process.hrtime(start);
-printResults('Total time (Memoizee)', toMilliseconds(end));
+console.log(fibMemoized.clear, fibMemoized3.clear);
+setInterval(() => {}, 0);

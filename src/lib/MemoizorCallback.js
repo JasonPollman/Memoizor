@@ -59,7 +59,7 @@ export default class MemoizorCallback extends MemoizorPromise {
 
         // Cache hit
         const cached = await this.get(resolvedArguments);
-        if (cached !== undefined) return wrappedCallback(...cached);
+        if (cached !== this.NOT_CACHED) return wrappedCallback(...cached);
 
         params.splice(callbackIndex, 0, wrappedCallback);
         // No cache, execute the function and store the results

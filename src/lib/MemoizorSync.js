@@ -37,7 +37,7 @@ export default class MemoizorSync extends Memoizor {
       // Look for cached value
       const resolvedArguments = this.resolveArguments(args);
       const cached = this.get(resolvedArguments);
-      if (cached !== undefined) return cached;
+      if (cached !== this.NOT_CACHED) return cached;
 
       // No cache, execute the function and store the results
       const results = this.target(...args);
@@ -54,7 +54,9 @@ export default class MemoizorSync extends Memoizor {
    * @override
    */
   key(args) {
+    if (args.length === 0) return '';
     if (_.isFunction(this.keyGenerator)) return `${this.uid}${this.keyGenerator(args)}`;
+
     const finalArgs = args.map(arg => (_.isFunction(arg) ? arg.toString() : arg));
     return crypto.createHash('md5')
       .update(`${this.uid}${stringifySync(finalArgs)}`)

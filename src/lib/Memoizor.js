@@ -426,12 +426,12 @@ export default class Memoizor extends EventEmitter {
     }
 
     // Validate resolver(s?) option
-    const resolvers = options.resolvers = options.resolvers || options.resolver;
+    const coerceArgs = options.coerceArgs;
 
-    if (!_.isUndefined(resolvers)
-      && ((!_.isFunction(resolvers) && !Array.isArray(resolvers))
-        || (Array.isArray(resolvers) && !resolvers.every(fn => _.isFunction(fn))))) {
-      throw new TypeError('The "resolver/resolvers" option must be a function or an array of functions!');
+    if (!_.isUndefined(coerceArgs)
+      && ((!_.isFunction(coerceArgs) && !Array.isArray(coerceArgs))
+        || (Array.isArray(coerceArgs) && !coerceArgs.every(fn => !fn || _.isFunction(fn))))) {
+      throw new TypeError('The "coerceArgs" option must be a function or an array of types: [function, null, undefined]!');
     }
 
     return options;
@@ -442,7 +442,7 @@ export default class Memoizor extends EventEmitter {
    * @param {object} options An object with options to set.
    * @returns {Memoizor} The current Memoizor instance.
    */
-  setOptions(options) {
+  setOptions(options, empty = false) {
     if (_.isPlainObject(options)) {
       _.merge(this[ps], this.validateOptions({
         uid: options.uid,
@@ -451,13 +451,13 @@ export default class Memoizor extends EventEmitter {
         ttl: options.ttl,
         maxRecords: options.maxRecords,
         resolver: options.resolver,
-        resolvers: options.resolvers,
+        coerceArgs: options.coerceArgs,
       }));
 
       // Must purge store if these are changed
-      if (options.uid || options.keyGenerator) {
-        const empty = this.empty();
-        if (_.isFunction(this.empty().then)) return empty.then(() => this.memoized);
+      if (empty && (options.uid || options.keyGenerator || options.coerceArgs)) {
+        const emptyResults = this.empty();
+        if (_.isFunction(emptyResults.then)) return emptyResults.then(() => this.memoized);
       }
     }
 
@@ -576,7 +576,7 @@ export default class Memoizor extends EventEmitter {
   }
 
   /**
-   * Used to resolve the maximum arguments length option and calls the options.resolvers
+   * Used to resolve the maximum arguments length option and calls the options.coerceArgs
    * resolver functions.
    * @param {Array<any>} args The arguments to process.
    * @returns {Array<any>} The processed arguments.
@@ -591,11 +591,11 @@ export default class Memoizor extends EventEmitter {
         (_.includes(this.ignoreArgs, idx) ? null : arg)));
     }
 
-    // Resolve any arguments using the given resolvers
-    if (this.resolvers) {
+    // Resolve any arguments using the given coerceArgs functions
+    if (this.coerceArgs) {
       resolvedArgs = slicedArgs.map((arg, idx) => {
-        if (_.isFunction(this.resolvers)) return this.resolvers(arg, idx, this);
-        if (this.resolvers[idx]) return this.resolvers[idx](arg, idx, this);
+        if (_.isFunction(this.coerceArgs)) return this.coerceArgs(arg, idx, this);
+        if (this.coerceArgs[idx]) return this.coerceArgs[idx](arg, idx, this);
         return arg;
       });
     }

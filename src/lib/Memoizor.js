@@ -81,7 +81,7 @@ function wrapSave(memoizor, controller) {
 
         debug('Store too large (exceeds %s), reducing store by %s%% (%s record(s))', mem.maxRecords, percentPad, deleteCount);
         // Delete the store item, decrement the total records
-        lrus.forEach(lru => {
+        lrus.forEach((lru) => {
           debug('Deleting LRU value with key: %s (%s lookup(s))', lru.key, lru.frequency);
           mem.delete(lru.key);
         });
@@ -271,7 +271,23 @@ export default class Memoizor extends EventEmitter {
       configurable: false,
       enumerable: false,
       value: {
+        /**
+         * An object, that when serialized will uniquely identify this function.
+         * This is used when generating the store keys, but is lax enough to work distributedly.
+         * @type {object<string>}
+         */
+        uid: JSON.stringify({
+          application: 'MEMOIZOR',
+          main: require.main.filename.replace(BACKSLASHES_TO_FORWARD_SLASHES, '/'),
+          function: this.name,
+        }),
+
+        /**
+         * Arguments to ignore
+         * @type {Array<number>}
+         */
         ignoreArgs: null,
+
         ...options,
 
         /**
@@ -329,17 +345,8 @@ export default class Memoizor extends EventEmitter {
          */
         storeCreated: {},
 
-        /**
-         * An object, that when serialized will uniquely identify this function.
-         * This is used when generating the store keys, but is lax enough to work distributedly.
-         * @type {object<string>}
-         */
-        uid: JSON.stringify({
-          application: 'MEMOIZOR',
-          main: require.main.filename.replace(BACKSLASHES_TO_FORWARD_SLASHES, '/'),
-          function: this.name,
-        }),
-
+        // Wrapped and called internally by each subclass
+        // e.g. promise, callback, sync
         onSave: null,
         onRetrieve: null,
         onDelete: null,
@@ -386,6 +393,11 @@ export default class Memoizor extends EventEmitter {
   validateOptions(opts) {
     const options = _.clone(opts);
 
+    // Check uid
+    if (!_.isUndefined(options.uid) && !_.isString(opts.uid)) {
+      throw new TypeError('Memoizor: options.uid must be a string!');
+    }
+
     // Ensure any ttl/maxRecords/length options are numeric
     ['ttl', 'maxRecords', 'maxArgs'].forEach((prop) => {
       if (options[prop]) options[prop] = parseInt(options[prop], 10) || undefined;
@@ -398,7 +410,7 @@ export default class Memoizor extends EventEmitter {
 
     // Validate options.ignoreArgs
     if (!_.isUndefined(options.ignoreArgs)) {
-      if (!Array.isArray(options.ignoreArgs)) throw new TypeError('options.ignoreArgs must be an array!');
+      if (!Array.isArray(options.ignoreArgs)) throw new TypeError('Memoizor: options.ignoreArgs must be an array!');
 
       // Map the array to integer parsed values and validate that they're all numbers
       options.ignoreArgs = options.ignoreArgs.map((val) => {
@@ -428,6 +440,7 @@ export default class Memoizor extends EventEmitter {
   setOptions(options) {
     if (_.isPlainObject(options)) {
       _.merge(this[ps], this.validateOptions({
+        uid: options.uid,
         maxArgs: options.maxArgs,
         ignoreArgs: options.ignoreArgs,
         ttl: options.ttl,

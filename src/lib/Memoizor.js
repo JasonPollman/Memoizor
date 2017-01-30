@@ -91,8 +91,7 @@ function wrapSave(memoizor, controller) {
     }
 
     const results = controller.save(key, value, args, memoizor);
-    mem.storeCreated[key] = toNanoseconds(process.hrtime());
-
+    if (_.isNumber(mem.ttl)) mem.storeCreated[key] = toNanoseconds(process.hrtime());
     if (_.isFunction(done)) done(null, results);
     return results;
   };
@@ -123,7 +122,8 @@ function wrapRetrieve(memoizor, controller) {
       const created = memoizor.storeCreated[key];
       if (created && toNanoseconds(process.hrtime()) - created > ttl) {
         debug('Timeout exceeded for key %s, deleting...', key);
-        mem.delete(args, () => { if (_.isFunction(done)) done(null, undefined); });
+        const deleted = mem.delete(args, () => { if (_.isFunction(done)) done(null, undefined); });
+        if (_.isFunction(deleted.then)) return deleted.then(() => undefined);
         return undefined;
       }
     }
@@ -393,9 +393,14 @@ export default class Memoizor extends EventEmitter {
   validateOptions(opts) {
     const options = _.clone(opts);
 
-    // Check uid
+    // Check that uid is a string
     if (!_.isUndefined(options.uid) && !_.isString(opts.uid)) {
       throw new TypeError('Memoizor: options.uid must be a string!');
+    }
+
+    // Check that keyGenerator is a function
+    if (!_.isUndefined(options.keyGenerator) && !_.isFunction(opts.keyGenerator)) {
+      throw new TypeError('Memoizor: options.keyGenerator must be a string!');
     }
 
     // Ensure any ttl/maxRecords/length options are numeric
@@ -448,9 +453,23 @@ export default class Memoizor extends EventEmitter {
         resolver: options.resolver,
         resolvers: options.resolvers,
       }));
+
+      // Must purge store if these are changed
+      if (options.uid || options.keyGenerator) {
+        const empty = this.empty();
+        if (_.isFunction(this.empty().then)) return empty.then(() => this.memoized);
+      }
     }
 
     return this.memoized;
+  }
+
+  /**
+   * Returns a copy of the store contents.
+   * @returns {any} A copy of the store contents.
+   */
+  storeContents() {
+    return this.store.contents();
   }
 
   /**
@@ -498,6 +517,8 @@ export default class Memoizor extends EventEmitter {
    * @memberof Memoizor
    */
   async key(args) {
+    if (_.isFunction(this.keyGenerator)) return `${this.uid}${await this.keyGenerator(args)}`;
+
     const finalArgs = args.map(arg => (_.isFunction(arg) ? arg.toString() : arg));
     return crypto.createHash('md5')
       .update(`${this.uid}${await stringifyAsync(finalArgs)}`)

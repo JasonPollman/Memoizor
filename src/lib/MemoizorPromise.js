@@ -66,13 +66,12 @@ export default class MemoizorPromise extends Memoizor {
   /**
    * Deletes a cached value.
    * @param {Array<any>} args The arguments signature used for storage and to generate the key.
-   * @returns {Memoizor} The current Memoizor instance.
+   * @returns {any} The deleted contents.
    * @memberof MemorizrPromise
    */
   async delete(args) {
     const key = await this.key(args);
-    await this.onDelete(key, args);
-    return this;
+    return await this.onDelete(key, args);
   }
 
   /**

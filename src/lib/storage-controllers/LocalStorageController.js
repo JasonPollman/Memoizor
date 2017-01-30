@@ -60,7 +60,9 @@ export default class LocalStorageController extends StorageController {
    * @override
    */
   delete(key) {
-    if (this[ps].store[key]) this[ps].store[key] = undefined;
+    const stored = this[ps].store[key];
+    if (stored) this[ps].store[key] = undefined;
+    return stored;
   }
 
   /**
@@ -71,5 +73,14 @@ export default class LocalStorageController extends StorageController {
    */
   empty() {
     this[ps].store = {};
+  }
+
+  /**
+   * The LocalStorageController contents implementation.
+   * @returns {object} A copy of the store contents.
+   * @override
+   */
+  contents() {
+    return { ...this[ps].store };
   }
 }

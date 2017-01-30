@@ -54,6 +54,7 @@ export default class MemoizorSync extends Memoizor {
    * @override
    */
   key(args) {
+    if (_.isFunction(this.keyGenerator)) return `${this.uid}${this.keyGenerator(args)}`;
     const finalArgs = args.map(arg => (_.isFunction(arg) ? arg.toString() : arg));
     return crypto.createHash('md5')
       .update(`${this.uid}${stringifySync(finalArgs)}`)
@@ -89,13 +90,12 @@ export default class MemoizorSync extends Memoizor {
   /**
    * Deletes a cached value.
    * @param {Array<any>} args The arguments signature used for storage and to generate the key.
-   * @returns {Memoizor} The current Memoizor instance.
+   * @returns {any} The deleted contents.
    * @memberof MemorizrSync
    */
   delete(args) {
     const key = this.key(args);
-    this.onDelete(key, args);
-    return this;
+    return this.onDelete(key, args);
   }
 
   /**

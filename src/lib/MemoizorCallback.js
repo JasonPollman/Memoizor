@@ -76,10 +76,10 @@ export default class MemoizorCallback extends MemoizorPromise {
    * @memberof MemorizrSync
    */
   async get(args, done) {
-      this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== undefined });
     return await new Promise(async (resolve, reject) => {
       const key = await this.key(args);
       this.onRetrieve(key, args, (err, cached) => {
+        this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== undefined });
         if (err) reject(err); else resolve(cached);
         done(err, cached);
       });
@@ -104,13 +104,12 @@ export default class MemoizorCallback extends MemoizorPromise {
    * Deletes a cached value.
    * @param {Array<any>} args The arguments signature used for storage and to generate the key.
    * @param {function} done A callback for completion.
-   * @returns {Memoizor} The current Memoizor instance.
+   * @returns {any} The deleted contents.
    * @memberof MemorizrCallback
    */
   async delete(args, done) {
     const key = await this.key(args);
-    await this.onDelete(key, args, done);
-    return this;
+    return await this.onDelete(key, args, done);
   }
 
   /**

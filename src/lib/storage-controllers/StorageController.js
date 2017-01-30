@@ -56,4 +56,13 @@ export default class StorageController {
   empty() {
     throw new Error(this.missingImplementationErrorMessage('empty'));
   }
+
+  /**
+   * Throws an error if the subclass doesn't implement this method.
+   * @throws Error
+   * @memberof StorageController
+   */
+  contents() {
+    throw new Error(this.missingImplementationErrorMessage('contents'));
+  }
 }

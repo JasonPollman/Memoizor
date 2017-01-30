@@ -425,7 +425,7 @@ export default class Memoizor extends EventEmitter {
 
     // Check that keyGenerator is a function
     if (!_.isUndefined(options.keyGenerator) && !_.isFunction(opts.keyGenerator)) {
-      throw new TypeError('Memoizor: options.keyGenerator must be a string!');
+      throw new TypeError('Memoizor: options.keyGenerator must be a function!');
     }
 
     // Ensure any ttl/maxRecords/length options are numeric

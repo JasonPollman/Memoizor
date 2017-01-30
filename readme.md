@@ -793,7 +793,7 @@ Note that some controllers **might not work** with certain function types. For e
 
 Simply subclass *memoizor.StorageController* and implement the methods shown in the template below. If you're building a controller for a **syncronous** function, the methods below must be synchronous, otherwise you're free to use async functions or return promises.
 
-**Note: You must return the symbol memoizor.NOT_CACHED if retrieve() yields no cache. Returning undefined will assume a call to the function with the given arguments signature returned undefined.**
+**Note: You must return the symbol ``memoizor.NOT_CACHED`` if retrieve() yields no cache. Returning ``undefined`` will assume a call to the function with the given arguments signature returned undefined.**
 
 ```js
 import { StorageController } from 'memoizor';

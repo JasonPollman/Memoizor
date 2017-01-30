@@ -91,7 +91,7 @@ sumMemoized((results) => {    // 1st call, function is executed
 
 1. [Basic Usage](#basic-usage)
 2. [Options](#options)
-3. [API](#API)
+3. [API](#api)
 4. [Events](#events)
 5. [Storage Controllers](#storage-controllers)
 
@@ -640,6 +640,8 @@ memoized(1, 2, 3); // Cache miss, using new storage controller.
 memoized(1, 2, 3); // Cache hit (withing FileStorageControllerSync)
 ```
 
+---
+
 
 
 ## Events
@@ -800,6 +802,8 @@ Emitted when a memoized function has been "disabled" *(fn.disable())* was called
 #### Arguments
 
 *none*
+
+---
 
 
 

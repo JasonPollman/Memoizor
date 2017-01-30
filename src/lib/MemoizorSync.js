@@ -72,7 +72,7 @@ export default class MemoizorSync extends Memoizor {
   get(args) {
     const key = this.key(args);
     const cached = this.onRetrieve(key, args);
-    this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== undefined });
+    this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== this.NOT_CACHED });
     return cached;
   }
 

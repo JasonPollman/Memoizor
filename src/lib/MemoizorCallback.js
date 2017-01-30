@@ -79,7 +79,7 @@ export default class MemoizorCallback extends MemoizorPromise {
     return await new Promise(async (resolve, reject) => {
       const key = await this.key(args);
       this.onRetrieve(key, args, (err, cached) => {
-        this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== undefined });
+        this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== this.NOT_CACHED });
         if (err) reject(err); else resolve(cached);
         done(err, cached);
       });

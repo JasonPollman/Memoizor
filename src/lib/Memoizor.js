@@ -23,7 +23,7 @@ const ps = Symbol();
  * Converts \\ to / to normalize filepaths between windows and unix systems.
  * @type {RegExp}
  */
-const BACKSLASHES_TO_FORWARD_SLASHES = /\\/g;
+const BACKSLASHES_G = /\\/g;
 
 /**
  * Converts a process.hrtime tuple to nanoseconds.
@@ -79,6 +79,7 @@ function wrapSave(memoizor, controller) {
         const deleteCount = Math.ceil((percentPad * 0.01) * lrus.length);
         lrus = lrus.slice(0, deleteCount);
 
+        mem.emit('overflow', lrus.map(lru => lru.key));
         debug('Store too large (exceeds %s), reducing store by %s%% (%s record(s))', mem.maxRecords, percentPad, deleteCount);
         // Delete the store item, decrement the total records
         lrus.forEach((lru) => {
@@ -123,12 +124,14 @@ function wrapRetrieve(memoizor, controller) {
       if (created && toNanoseconds(process.hrtime()) - created > ttl) {
         debug('Timeout exceeded for key %s, deleting...', key);
         const deleted = mem.delete(args, () => { if (_.isFunction(done)) done(null, undefined); });
+        mem.emit('retrieved', key, undefined, args);
         if (_.isFunction(deleted.then)) return deleted.then(() => undefined);
         return undefined;
       }
     }
 
     const results = controller.retrieve(key, args, memoizor);
+    mem.emit('retrieved', key, results, args);
     if (_.isFunction(done)) done(null, results);
     return results;
   };
@@ -148,7 +151,7 @@ function wrapDelete(memoizor, controller) {
     mem.storeCreated[key] = undefined;
 
     mem.debug({ method: 'delete', function: mem.name, key });
-    mem.emit('delete', key, ...args);
+    mem.emit('delete', key, args);
 
     if (_.isNumber(maxRecords) && storeKeyFrequencies[key]) {
       storeKeyFrequencies[key] = undefined;
@@ -156,6 +159,7 @@ function wrapDelete(memoizor, controller) {
     }
 
     const results = controller.delete(key, args, memoizor);
+    mem.emit('deleted', key, results, args);
     if (_.isFunction(done)) done(null, results);
     return results;
   };
@@ -284,7 +288,7 @@ export default class Memoizor extends EventEmitter {
          */
         uid: JSON.stringify({
           application: 'MEMOIZOR',
-          main: require.main.filename.replace(BACKSLASHES_TO_FORWARD_SLASHES, '/'),
+          main: require.main.filename.replace(BACKSLASHES_G, '/'),
           function: this.name,
         }),
 
@@ -294,6 +298,13 @@ export default class Memoizor extends EventEmitter {
          */
         ignoreArgs: null,
 
+        /**
+         * The maximum number values allowed to be stored.
+         * @type {number}
+         */
+        maxRecords: 5000,
+
+        // Overwrite with user values
         ...options,
 
         /**
@@ -418,14 +429,19 @@ export default class Memoizor extends EventEmitter {
     }
 
     // Ensure any ttl/maxRecords/length options are numeric
-    ['ttl', 'maxRecords', 'maxArgs'].forEach((prop) => {
-      if (options[prop]) options[prop] = parseInt(options[prop], 10) || undefined;
+    ['ttl', 'maxRecords', 'maxArgs', 'LRUPercentPadding', 'LRUHistoryFactor'].forEach((prop) => {
+      const parsed = parseInt(options[prop], 10);
+      if (options[prop]) options[prop] = _.isNumber(parsed) ? parsed : undefined;
     });
 
     // Clamp min values for these options, convert ttl to nanoseconds
     if (_.isNumber(options.ttl)) options.ttl = Math.max(60, options.ttl) * 1000000;
     if (_.isNumber(options.maxRecords)) options.maxRecords = Math.max(0, options.maxRecords);
     if (_.isNumber(options.maxArgs)) options.maxArgs = Math.max(1, options.maxArgs);
+
+    if (_.isNumber(options.LRUPercentPadding)) {
+      options.LRUPercentPadding = Math.max(1, options.LRUPercentPadding);
+    }
 
     // Validate options.ignoreArgs
     if (!_.isUndefined(options.ignoreArgs)) {
@@ -464,7 +480,6 @@ export default class Memoizor extends EventEmitter {
         ignoreArgs: options.ignoreArgs,
         ttl: options.ttl,
         maxRecords: options.maxRecords,
-        resolver: options.resolver,
         coerceArgs: options.coerceArgs,
       }));
 
@@ -600,12 +615,6 @@ export default class Memoizor extends EventEmitter {
     const slicedArgs = (_.isNumber(this.maxArgs) ? args.slice(0, this.maxArgs) : args);
     let resolvedArgs = slicedArgs;
 
-    // Strip out any ignored args
-    if (this.ignoreArgs) {
-      resolvedArgs = _.compact(resolvedArgs.map((arg, idx) =>
-        (_.includes(this.ignoreArgs, idx) ? null : arg)));
-    }
-
     // Resolve any arguments using the given coerceArgs functions
     if (this.coerceArgs) {
       resolvedArgs = slicedArgs.map((arg, idx) => {
@@ -613,6 +622,12 @@ export default class Memoizor extends EventEmitter {
         if (this.coerceArgs[idx]) return this.coerceArgs[idx](arg, idx, this);
         return arg;
       });
+    }
+
+    // Strip out any ignored args
+    if (this.ignoreArgs) {
+      resolvedArgs = _.compact(resolvedArgs.map((arg, idx) =>
+        (_.includes(this.ignoreArgs, idx) ? null : arg)));
     }
 
     return resolvedArgs;

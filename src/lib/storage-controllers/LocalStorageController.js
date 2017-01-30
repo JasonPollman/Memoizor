@@ -37,7 +37,7 @@ export default class LocalStorageController extends StorageController {
    * The LocalStorageController save implementation.
    * @param {string} key The unique key for the arguments signature.
    * @param {any} value The value produced by the memoized function.
-   * @returns {undefined}
+   * @returns {any} The valued passed in.
    * @override
    */
   save(key, value) {

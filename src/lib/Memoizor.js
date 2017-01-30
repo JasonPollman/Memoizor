@@ -195,7 +195,7 @@ function wrapEmpty(memoizor, controller) {
  * Properties to ignore decorating the Memoize instance with.
  * @type {Array<string>}
  */
-const IGNORED_PROPERTIES = ['wrapStorageController', 'resolveArguments', 'validateOptions', 'debug'];
+const IGNORED_PROPERTIES = ['wrapStorageController', 'create', 'validateOptions', 'debug'];
 
 /**
  * Used to spread into Object.defineProperties.

@@ -47,7 +47,13 @@ export default class MemoizorCallback extends MemoizorPromise {
 
         // Get the list of params with the callback removed.
         const params = [...args];
-        const callback = params.splice(callbackIndex, 1)[0];
+        let callback = params.splice(callbackIndex, 1)[0];
+
+        // Hmmm, use didn't provide a proper callback
+        if (!_.isFunction(callback)) {
+          params.push(callback);
+          callback = _.noop;
+        }
 
         // Look for cached value
         const resolvedArguments = this.resolveArguments(params);

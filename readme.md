@@ -65,7 +65,7 @@ fn(arg, () => {}); // Probably *not* cached yet, since (for callbacks) caching i
 
 #### Specifying the Callback Argument
 
-You can specify the *index* of the callback arugment using *options.callbackArgument*. If *options.callbackArgument* is either unspecified or a non-numeric value, the **last argument passed** is assumed.
+You can specify the *index* of the callback argument using *options.callbackIndex*. If *options.callbackIndex* is either unspecified or a non-numeric value, the **last argument passed** is assumed.
 
 ```js
 // Providing the callback as the first arugment is unconventional and discouraged,
@@ -78,9 +78,9 @@ function sum(done, ...nums) {
 const sumMemoized = memoizor.callback(sum, { callbackIndex: 0 });
 
 sumMemoized((results) => {    // 1st call, function is executed
-  console.log(results);     // Prints 32
+  console.log(results);       // Prints 32
   sumMemoized((results) => {  // 2nd call, cache hit
-    console.log(results);   // Prints 32
+    console.log(results);     // Prints 32
   }, 5, 7, 9, 11);
 }, 5, 7, 9, 11);
 ```
@@ -173,35 +173,39 @@ Each *coerceArgs* function is called with two arguments: *arg* and *index* where
 **Note: this only applies to the memoization of the function, the original arguments are still passed to the oirginal function if no cached value was found.**
 
 ```js
-// Array coerceArgs example
 const fn = memoizor(fn, {
   coerceArgs: [String, Boolean, arg => (arg * 2)]
 });
 
-// Arguments list coerced to: ['1000', false, 30]
-memoized(1000, '', '15');
+memoized(1000, '', '15'); // Arguments list coerced to: ['1000', false, 30]
 
-// Array coerceArgs example, skipping the first 2 arguments
-// A falsy value will be skipped and no coercion will occur for that argument.
 const fn = memoizor(fn, {
+  // A falsy value will be skipped and no coercion will occur for that argument.
   coerceArgs: [null, null, arg => (arg * 2)]
 });
 
-// Arguments list coerced to: [1000, '', 30]
-memoized(1000, '', '15');
+memoized(1000, '', '15'); // Arguments list coerced to: [1000, '', 30]
 ```
 
 ### maxRecords
 
 > options.maxRecords = *{number}*
 
-**Limits the number of store records allowed.** Once the maximum number of values has been cached, the first 10% LRU *(least recently used)* store values will be purged. Rather than purging only a single item, 10% is removed so the logic to prune the store isn't called everytime a new value is cached.
+**Limits the number of store records allowed.** Once the maximum number of values has been cached, the first 10% LRU *(least recently used)* store values will be purged. Rather than purging only a single item, 10% is removed so the logic to prune the store isn't called every time a new value is cached.
 
 **Default value is:** ``5000``.
 
 You can set *options.LRUPercentPadding* to a number in the range ``0 < LRUPercentPadding <= 100`` to alter the percentage of records deleted from the store when **maxRecords** is exceeded.
 
 When the number of maxRecords is exceed the **[overflow](#overflow)** event is emitted.
+
+### callbackIndex
+
+> options.callbackIndex = *{number}*
+
+For *memoizor.callback*, specifies which argument is the callback argument. If omitted, the **last argument** will be assumed.
+
+**See: [Specifying the Callback Argument](#specifying-the-callback-argument)**
 
 ### keyGenerator
 
@@ -266,6 +270,347 @@ Which guarantees that the store keys will be unique to the *current application*
 Since store cache is local to each function, no collisions are possible when using Memoizor within a single process. However, if running multiple processes while using Memoizor and a distributed store, collsions **are** possible if you memoize multiple functions with the same name (note that anonymous functions recieve the name "anonymous").
 
 *If that's the case, you might want to set this accordingly.*
+
+### storageController
+
+> options.storageController =  *{StorageController}*
+
+**Sets the storage controller to use to manage cache storage. **     
+**See:  [StorageControllers](#storage-controllers).**
+
+```js
+import memoizor from 'memoizor';
+
+function fn(obj) { ... }
+const memoized = memoizor(fn, {
+  storageController = new memoizor.FileStorageController({ path: './memoizor-cache'}),
+});
+```
+
+
+
+## API
+
+**Each *Memoizor*'ed function contains the following functions:**
+
+
+
+### key
+
+Gets store the key for the provided arguments list.    
+You should call this with the **resolved arguments** (i.e. *Memoizor#resolveArguments*).
+
+> **Memoizor#key**(args)
+
+#### Parameters
+
+**args** *{Array\<any>}*    
+The arguments signature to get the key for.
+
+#### Returns
+
+*{string|Promise}* For *memoizor.sync* based functions, a string containing the key for the given arguments list. For *memoizor.callback* and *memoizor.promise* based functions, a promise that resolves with the key.
+
+```js
+import memoizor from 'memoizor';
+
+function fn(arg) { ... }
+const memoized = memoizor(fn);
+
+const obj = { foo: 'hello', bar: 'world' };          
+memoized(obj);
+
+memoized.key(memoized.resolveArguments([obj])); // Returns the key for the arguments signature [obj]
+```
+
+
+
+### get
+
+Queries the store the the cache associated with the given arguments list. You should call this with the **resolved arguments** (i.e. *Memoizor#resolveArguments*).
+
+> **Memoizor#get**(args)
+
+#### Parameters
+
+**args** *{Array\<any>}*    
+The arguments signature to lookup the cached value of.
+
+#### Returns
+
+*{any|Promise}* For *memoizor.sync* based functions, the value associated with the given arguments signature. For *memoizor.callback* and *memoizor.promise* based functions, a promise that resolves with the value.
+
+Note if ``value === memoizor.NOT_CACHED``, it incidates the value didn't exist in the store.
+
+```js
+import memoizor from 'memoizor';
+
+function fn(obj) {
+  return { ...obj, baz: 'cat' };
+}
+
+const memoized = memoizor(fn);
+
+const obj = { foo: 'hello', bar: 'world' };          
+memoized(obj);
+
+memoized.get(memoized.resolveArguments([obj])); // Returns { foo: 'hello', bar: 'world', baz: 'cat' }
+```
+
+
+
+### save
+
+Adds a value to the store.
+
+> **Memoizor#save**(value, args)
+
+#### Parameters
+
+**value** *{any}*    
+The value to store.
+
+**args** *{Array\<any>}*    
+The arguments signature to associate with this value.
+
+#### Returns
+
+*{any|Promise}* For *memoizor.sync* based functions, the passed in as *value*. For *memoizor.callback* and *memoizor.promise* based functions, a promise that resolves with the originally passed value.
+
+```js
+import memoizor from 'memoizor';
+
+function fn(obj) { ... }
+const memoized = memoizor(fn);
+
+// Pre-caching the arguments signature [obj]
+memoized.save(memoized.resolveArguments([obj]));
+
+const obj = { foo: 'hello', bar: 'world' };          
+memoized(obj); // Cache hit
+```
+
+
+
+### delete
+
+Deletes a value from the store.
+
+> **Memoizor#delete**(args)
+
+#### Parameters
+
+**args** *{Array\<any>}*    
+The arguments signature to deleted the associate store value of.
+
+#### Returns
+
+*{any|Promise}* For *memoizor.sync* based functions, the deleted cache value. For *memoizor.callback* and *memoizor.promise* based functions, a promise that resolves with the deleted cache value.
+
+```js
+import memoizor from 'memoizor';
+
+function fn(obj) { ... }
+const memoized = memoizor(fn);
+
+const obj = { foo: 'hello', bar: 'world' };          
+memoized(obj);
+
+// Delete cache with the arguments signature [obj]
+memoized.delete(memoized.resolveArguments([obj]));
+
+memoized(obj); // Cache miss, cache for [obj] was deleted.
+```
+
+
+
+### empty
+
+Empties all values from the store. 
+
+> **Memoizor#empty**()
+
+#### Parameters
+
+*none*
+
+#### Returns
+
+*{Memoizor}* The memoizor instance associated with the memoized function.
+
+```js
+import memoizor from 'memoizor';
+
+function fn(obj) { ... }
+const memoized = memoizor(fn);
+
+const obj = { foo: 'hello', bar: 'world' };          
+memoized(obj);
+
+// Delete all cache
+memoized.empty();
+
+memoized(obj); // Cache miss, cache for [obj] was deleted.
+```
+
+
+
+### disable
+
+Disables memoization until *Memoizor#enable* is called.
+
+> **Memoizor#disable**([,empty])
+
+#### Parameters
+
+**empty** *{boolean=}*    
+If truthy, the store will be emptied before disabling.
+
+#### Returns
+
+*{Memoizor}* The memoizor instance associated with the memoized function.
+
+```js
+import memoizor from 'memoizor';
+
+function fn(obj) { ... }
+const memoized = memoizor(fn);
+
+const obj = { foo: 'hello', bar: 'world' };          
+memoized(obj);
+memoized(obj); // Cache hit.
+
+// Disable memoization
+memoized.disable();
+                  
+memoized(obj); // No caching, memoization disabled
+```
+
+
+
+### enable
+
+Re-enables memoization.
+
+> **Memoizor#enable**()
+
+#### Parameters
+
+*none*
+
+#### Returns
+
+*{Memoizor}* The memoizor instance associated with the memoized function.
+
+```js
+import memoizor from 'memoizor';
+
+function fn(obj) { ... }
+const memoized = memoizor(fn);
+const obj = { foo: 'hello', bar: 'world' };
+
+memoized(obj);
+memoized(obj); // Cache hit.
+
+memoized.disable();
+memoized(obj); // No caching, memoization disabled
+
+memoized.enable();
+memoized(obj); // Cache hit.
+```
+
+
+
+### resolveArguments
+
+Adjusts the given arugment array based on the current options set.
+
+> **Memoizor#resolveArguments**(args)
+
+#### Parameters
+
+**args** *{Array\<any>}*    
+The arguments signature to resolve.
+
+#### Returns
+
+*{Array\<any>}* The adjusted arguments list based on the settings: *maxArgs, ignoreArgs* and *coerceArgs*..
+
+```js
+import memoizor from 'memoizor';
+
+function fn(...args) { return args.reduce((prev, curr) => (prev * curr), 1); }
+const memoized = memoizor(fn, { maxArgs: 3, ignoreArgs: [0], coerceArgs: [null, null, Boolean] });
+
+memoized.resolveArguments([1, 2, 3, 4, 5]) // => [2, true]
+```
+
+
+
+### storeContents
+
+Retrieves a **copy** of the store contents.
+
+> **Memoizor#storeContents**()
+
+#### Parameters
+
+*none*
+
+#### Returns
+
+*{any}* The store contents, which will vary depending on which [**StorageController**](#storage-controllers) is being used.
+
+```js
+import memoizor from 'memoizor';
+
+function fn(...args) { return args.reduce((prev, curr) => (prev * curr), 1); }
+const memoized = memoizor(fn);
+
+memoized(1, 2, 3);
+memoized(1, 2, 3, 4);
+
+const cached = memoized.storeContents();
+
+// Cached might be something like:
+{
+  '40afe18f83ad7849c7f9444adc4e9eba': 6,
+  '3e6ea02f0c78f53e5cd659c18f9cd69d': 24,
+}
+```
+
+
+
+### setStorageController
+
+Sets the storage controller to use. **See:  [StorageControllers](#storage-controllers).**
+
+> **Memoizor#setStorageController**(controller)
+
+#### Parameters
+
+**controller** *{StorageController}*    
+The storage controller to use to manage caching.
+
+#### Returns
+
+*{Memoizor}* The memoizor instance associated with the memoized function.
+
+```js
+import memoizor from 'memoizor';
+
+function fn(...args) { return args.reduce((prev, curr) => (prev * curr), 1); }
+const memoized = memoizor(fn);
+
+memoized(1, 2, 3);
+memoized(1, 2, 3); // Cache hit
+
+// Set the storage controller to use the FS storage controller
+memoized.setStorageController(new memoizor.FileStorageControllerSync({ path: './memoizor-cache'}));
+
+memoized(1, 2, 3); // Cache miss, using new storage controller.
+memoized(1, 2, 3); // Cache hit (withing FileStorageControllerSync)
+```
 
 
 
@@ -411,3 +756,111 @@ Emitted when a memoized function has been "disabled" *(fn.disable())* was called
 #### Arguments
 
 *none*
+
+
+
+## Storage Controllers
+
+*Storage Controllers* are classes that define the CRUD for Memoizor. Each controller implements a *save, retrieve, delete, empty* and *contents* method.
+
+Each storage controller must extend **memoizor.StorageController** and implement every method listed above. The default storage controller is **memoizor.LocalStorageController** and stores data using a plain JS object.
+
+Storage Controllers allow you to do things like use the file system to persist cache between processes (**FileSystemController** and **FileSystemControllerSync**) or use an API to POST to a database somewhere.
+
+Note that some controllers **might not work** with certain function types. For example, the **FileSystemController** should not be used with syncronous functions, as it makes asyncronous file system function calls. The default controller works for all three function types (sync, callback, and promise).
+
+#### Memoizor comes with the following built in controllers:
+
+- **StorageController**
+
+  The "base" controller, which cannot be used (abstract).
+
+- **LocalStorageController**
+
+  The default controller, which stores data in memory, using a plain JS object
+
+- **FileSystemController**
+
+  An async file system controller that persists memoizor cache between program life cycles and stores cache both in memory and on disk. Cache is loaded from a file when the controller instance is created.
+
+- **FileSystemControllerSync**
+
+  A synchronous version of the FileSystemController.
+
+
+
+### Building Your Own Controllers
+
+Simply subclass *memoizor.StorageController* and implement the methods shown in the template below. If you're building a controller for a **syncronous** function, the methods below must be synchronous, otherwise you're free to use async functions or return promises.
+
+**Note: You must return the symbol memoizor.NOT_CACHED if retrieve() yields no cache. Returning undefined will assume a call to the function with the given arguments signature returned undefined.**
+
+```js
+import { StorageController } from 'memoizor';
+
+class MyStorageController extends StorageController {
+  constructor() {
+    super();
+  }
+  
+  /**
+   * MyStorageController save implementation.
+   * @param {string} key The unique key generated from the arguments signature.
+   * @param {any} value The value produced by the memoized function.
+   * @param {Array<any>} args The adjusted (resolved) arguments used to create key.
+   * @param {Memoizor} memoizor The Memoizor instance associated with a memoized function.
+   * @returns {any} The original value to save.
+   * @override
+   */
+  save(key, value, args, memoizor) {
+    // Store value with key
+    return value;
+  }
+  
+  /**
+   * MyStorageController retrieve implementation.
+   * @param {string} key The unique key generated from the arguments signature.
+   * @param {Array<any>} args The adjusted (resolved) arguments used to create key.
+   * @param {Memoizor} memoizor The Memoizor instance associated with a memoized function.
+   * @returns {any} The stored value or memoizor.NOT_CACHED if the cache didn't exist.
+   * @override
+   */
+  retrieve(key, args, memoizor) {
+    if (isNotCached) return memoizor.NOT_CACHED;
+    // Return cached value
+  }
+  
+  /**
+   * MyStorageController delete implementation.
+   * @param {string} key The unique key generated from the arguments signature.
+   * @param {Array<any>} args The adjusted (resolved) arguments used to create key.
+   * @param {Memoizor} memoizor The Memoizor instance associated with a memoized function.
+   * @returns {any} The stored value or memoizor.NOT_CACHED if the cache didn't exist.
+   * @override
+   */
+  delete(key, args, memoizor) {
+    if (isNotCached) return;
+    // Delete cached value
+  }
+  
+  /**
+   * MyStorageController empty implementation.
+   * @param {Memoizor} memoizor The Memoizor instance associated with a memoized function.
+   * @returns {undefined}
+   * @override
+   */
+  empty(memoizor) {
+    // Dump cache
+  }
+  
+  /**
+   * MyStorageController contents implementation.
+   * @returns {any} A copy of the store contents.
+   * @override
+   */
+  contents() {
+    // Return a copy of the cached values
+  }
+}
+```
+

@@ -8,11 +8,12 @@
     "latest"
   ],
   "plugins": [
-    "transform-class-properties",
     "source-map-support-for-6",
-    "transform-export-extensions",
+    "transform-decorators-legacy",
     "transform-object-rest-spread",
+    "transform-class-properties",
     "transform-promise-to-bluebird",
+    "transform-export-extensions",
     "transform-runtime"
   ],
   "env": {

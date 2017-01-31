@@ -31,9 +31,9 @@ export default class MemoizorPromise extends Memoizor {
   create() {
     return async (...args) => {
       const resolvedArguments = this.resolveArguments(args);
-      const cached = await this.get(resolvedArguments);
+      const cached = await this.get(resolvedArguments, true);
       if (cached !== this.NOT_CACHED) return cached;
-      return await this.save(await this.target(...args), resolvedArguments);
+      return await this.save(await this.target(...args), resolvedArguments, true);
     };
   }
 
@@ -43,9 +43,10 @@ export default class MemoizorPromise extends Memoizor {
    * @returns {any} The cached value, if it exists.
    * @memberof MemorizrPromise
    */
-  async get(args) {
-    const key = await this.key(args);
-    const cached = await this.onRetrieve(key, args);
+  async get(args, resolved = false) {
+    const resolvedArguments = resolved ? args : this.resolveArguments(resolved);
+    const key = await this.key(resolvedArguments);
+    const cached = await this.onRetrieve(key, resolvedArguments);
     this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== this.NOT_CACHED });
     return cached;
   }
@@ -57,9 +58,10 @@ export default class MemoizorPromise extends Memoizor {
    * @returns {any} The cached value, if it exists.
    * @memberof MemorizrPromise
    */
-  async save(value, args) {
-    const key = await this.key(args);
-    await this.onSave(key, value, args);
+  async save(value, args, resolved = false) {
+    const resolvedArguments = resolved ? args : this.resolveArguments(resolved);
+    const key = await this.key(resolvedArguments);
+    await this.onSave(key, value, resolvedArguments);
     return value;
   }
 
@@ -69,9 +71,10 @@ export default class MemoizorPromise extends Memoizor {
    * @returns {any} The deleted contents.
    * @memberof MemorizrPromise
    */
-  async delete(args) {
-    const key = await this.key(args);
-    return await this.onDelete(key, args);
+  async delete(args, resolved = false) {
+    const resolvedArguments = resolved ? args : this.resolveArguments(resolved);
+    const key = await this.key(resolvedArguments);
+    return await this.onDelete(key, resolvedArguments);
   }
 
   /**

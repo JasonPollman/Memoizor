@@ -42,8 +42,8 @@ export default class MemoizorCallback extends MemoizorPromise {
     return (...args) => {
       (async () => {
         const callbackIndex = _.isNumber(this.callbackIndex)
-        ? Math.min(this.callbackIndex, args.length)
-        : args.length - 1;
+          ? Math.min(this.callbackIndex, args.length)
+          : args.length - 1;
 
         // Get the list of params with the callback removed.
         const params = [...args];
@@ -60,14 +60,14 @@ export default class MemoizorCallback extends MemoizorPromise {
 
         const wrappedCallback = (...results) => {
           if (results[0] instanceof Error) return callback(results[0]);
-          return this.save(results, resolvedArguments).then(() => callback(...results));
+          return this.save(results, resolvedArguments, null, true).then(() => callback(...results));
         };
 
         // Cache hit
-        const cached = await this.get(resolvedArguments);
+        const cached = await this.get(resolvedArguments, null, true);
         if (cached !== this.NOT_CACHED) return wrappedCallback(...cached);
-
         params.splice(callbackIndex, 0, wrappedCallback);
+
         // No cache, execute the function and store the results
         return this.target(...params);
       })();
@@ -81,10 +81,11 @@ export default class MemoizorCallback extends MemoizorPromise {
    * @returns {Memoizor} The current Memoizor instance.
    * @memberof MemorizrSync
    */
-  async get(args, done) {
+  async get(args, done, resolved = false) {
     return await new Promise(async (resolve, reject) => {
-      const key = await this.key(args);
-      this.onRetrieve(key, args, (err, cached) => {
+      const resolvedArguments = resolved ? args : this.resolveArguments(resolved);
+      const key = await this.key(resolvedArguments);
+      this.onRetrieve(key, resolvedArguments, (err, cached) => {
         this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== this.NOT_CACHED });
         if (err) reject(err); else resolve(cached);
         done(err, cached);
@@ -100,9 +101,10 @@ export default class MemoizorCallback extends MemoizorPromise {
    * @returns {Memoizor} The current Memoizor instance.
    * @memberof MemorizrCallback
    */
-  async save(value, args, done) {
-    const key = await this.key(args);
-    await this.onSave(key, value, args, done);
+  async save(value, args, done, resolved = false) {
+    const resolvedArguments = resolved ? args : this.resolveArguments(resolved);
+    const key = await this.key(resolvedArguments);
+    await this.onSave(key, value, resolvedArguments, done);
     return value;
   }
 
@@ -113,9 +115,10 @@ export default class MemoizorCallback extends MemoizorPromise {
    * @returns {any} The deleted contents.
    * @memberof MemorizrCallback
    */
-  async delete(args, done) {
-    const key = await this.key(args);
-    return await this.onDelete(key, args, done);
+  async delete(args, done, resolved = false) {
+    const resolvedArguments = resolved ? args : this.resolveArguments(resolved);
+    const key = await this.key(resolvedArguments);
+    return await this.onDelete(key, resolvedArguments, done);
   }
 
   /**

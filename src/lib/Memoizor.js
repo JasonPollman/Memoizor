@@ -329,7 +329,7 @@ export default class Memoizor extends EventEmitter {
          * The original function.
          * @type {function}
          */
-        target,
+        target: options.bind ? target.bind(options.bind) : target,
 
         /**
          * The memoized function.
@@ -385,11 +385,13 @@ export default class Memoizor extends EventEmitter {
 
     // Create the memoized target
     const memoized = this.create();
-
-    this[ps].memoized = this[ps].callable = decorate(Memoizor.prototype, this, (...args) => {
+    const memoizorWrapper = (...args) => {
       if (this.callable === this.target) return target(...args);
       return memoized(...args);
-    });
+    };
+
+    Object.defineProperty(memoizorWrapper, 'name', { value: this.name });
+    this[ps].memoized = this[ps].callable = decorate(Memoizor.prototype, this, memoizorWrapper);
   }
 
   /**

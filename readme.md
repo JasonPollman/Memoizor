@@ -6,7 +6,14 @@
 
 ## Features
 
-​
+
+
+## Install
+
+```bash
+npm install memoizor --save
+```
+
 
 
 ## Basic Usage
@@ -89,11 +96,29 @@ sumMemoized((results) => {    // 1st call, function is executed
 
 ## Contents
 
-1. [Basic Usage](#basic-usage)
-2. [Options](#options)
-3. [API](#api)
-4. [Events](#events)
-5. [Storage Controllers](#storage-controllers)
+1. [**Install**](#install)
+
+2. [**Basic Usage**](#basic-usage)
+
+   - [Memoizing Syncronous Functions](#syncronous-functions)
+   - [Memoizing Promise Functions](#promise-returning-functions)
+   - [Memoizing Callback Functions](#callback-functions)
+
+3. **[Options](#options)**
+
+4. **[Memoizing Multiple Functions](#memoizing-multiple-functions)**
+
+5. **[Memoizing Class Methods](#memoizing-class-methods)**
+
+   - [Decorating Class Methods](#decorating-class-methods)
+
+6. **[API](#api)**
+
+7. **[Events](#events)**
+
+8. **[Storage Controllers](#storage-controllers)**
+
+   ​
 
 
 
@@ -217,6 +242,22 @@ For *memoizor.callback*, specifies which argument is the callback argument. If o
 
 **See: [Specifying the Callback Argument](#specifying-the-callback-argument)**
 
+### bind
+
+> options.bind =  *{any}*
+
+Binds the memoized function to the provided value.
+
+```js
+function foo() {
+  console.log(this);
+}
+const baz = memoizor(foo, { bind: 'bar' });
+const baz = memoizor(baz.bind('bar')); // Or, equivalently...
+
+baz(); // Prints 'bar'
+```
+
 ### keyGenerator
 
 > options.keyGenerator =  *{function}*
@@ -299,16 +340,171 @@ const memoized = memoizor(fn, {
 
 
 
+## Memoizing Multiple Functions
+
+Memoizor has a few convenience functions to memoize an *array* or *object* of functions: ``Memoizor.sync.all``, ``Memoizor.callback.all`` and ``Memoizor.promise.all``.
+
+Provided an object these functions will return an object with the same keys, with all functions memoized. If any of the object's properties isn't a function, it will be added to the returned object as is.
+
+Arrays behave similarly (except that an array is returned).
+
+#### **Memoizing an object**
+
+```js
+import memoizor from 'memoizor';
+
+// Sync functions...
+const functions = {
+  sum: (...args) => args.reduce((a, b) => (a + b), 0),
+  multiply: (...args) => args.reduce((a, b) => (a * b), 1),
+  divide: (...args) => args.reduce((a, b) => (b / a), 1)
+};
+
+// Returns an object with the same keys and all of the functions memoized.
+memoizor.all(functions, { /* options */ });
+
+// Callback functions...
+const callbackFunctions = {
+  sum: (nums, done) => done(nums.reduce((a, b) => (a + b), 0)),
+  multiply: (nums, done) => done(nums.reduce((a, b) => (a * b), 1)),
+  divide: (nums, done) => done(nums.reduce((a, b) => (b / a), 1))
+};
+
+// Returns an object with the same keys, but all of the functions memoized.
+memoizor.callback.all(callbackFunctions, { /* options */ });
+
+// For promises...
+memoizor.promise.all();
+```
+
+#### **Memoizing an array**
+
+```js
+const memoizor = require('memoizor');
+const functions = [function foo() { ... }, function bar() { ... }];
+
+// Returns an array with the same ordering, but all of the functions memoized.
+const [memoizedFoo, memoizedBar] = memoizor.all(functions);
+                   
+// For callbacks and promises
+memoizor.callback.all([...]);
+memoizor.promise.all([...]);
+```
+
+
+
+## Memoizing Class Methods
+
+If you want to memoize a method for every instance of a class, you can memoize it's prototype method using ``Memoizor.memoizeMethod``.
+
+```js
+import { memoizeMethod } from 'memoizor';
+
+class MyClass {
+  constructor() {
+    ...
+  }
+  
+  syncronousMethod() {
+    ...
+  }
+  
+  promiseMethod() {
+    ...
+  }
+  
+  callbackMethod(done) {
+    ...
+  }
+}
+
+// Memoize each method...
+// Now *every instance* will get it's own memoized version of each function.
+memoizeMethod.sync(MyClass.prototype, 'syncronousMethod', { /* options */ });
+memoizeMethod.promise(MyClass.prototype, 'promiseMethod', { /* options */ });
+memoizeMethod.callback(MyClass.prototype, 'callbackMethod', { /* options */ });
+    
+// ES5 Style
+function MyClass() { ... }
+MyClass.prototype.myMethod = function () { ... };
+memoizeMethod.sync(Myclass.prototype, 'myMethod');
+```
+
+If you're working with classes, you should use ``memoizeMethod``. Note that the default import ``memoizor`` will *work* on prototype methods, but the results *probably won't be what you intended.* For example...
+
+**If you do:**
+
+```js
+import memoizor from 'memoizor';
+
+function MyClass() { ... }
+MyClass.prototype.foo = memoizor(function () { ... });
+```
+
+**IT WILL MEMOIZE THE PROTOTYPE METHOD'S CALLS AND ALL INSTANCES WILL SHARE THE SAME CACHE.**    
+*Meaning...*
+
+```js
+function MyClass() { ... }
+MyClass.prototype.foo = memoizor(function () { ... });
+                                                   
+const x = new MyClass();
+const y = new MyClass();
+
+x.foo(); // First call, no cache
+y.foo(); // Whoops, the *prototype* was memoized, cache hit!
+```
+
+While I can't think of a valid use case to do this over memoizing a static method, just be sure the above behavior is what you intended. Again, if you're memoizing class methods you should probably use ``memoizeMethod``.
+
+**Or, if you've got decorators setup, you'll likely find the below a bit more user friendly.**
+
+
+
+### Decorating Class Methods
+
+**Memoizor comes with some handy built in method decorators.**     
+To decorate a class method with Memoizor cache, use *Memoizor.memoize*, i.e. ``@memoize(options)``. For promise and callback methods use: ``@memoize.promise(options)`` and ``@memoize.callback(options)``, respectively.
+
+```js
+import { memoize } from 'memoizor';
+
+class MyClass {
+  constructor() {
+    ...
+  }
+  
+  // Decorates syncronous functions:
+  @memoize({ /* options */ })
+  syncronousMethod() {
+    ...
+  }
+  
+  // Decorates promise functions:
+  @memoize.promise({ /* options */ })
+  promiseMethod() {
+    ...
+  }
+  
+  // Decorates callback functions:
+  @memoize.callback({ /* options */ })
+  callbackMethod(done) {
+    ...
+  }
+}
+```
+
+
+
 ## API
 
-**Each *Memoizor*'ed function contains the following functions:**
+**Each *Memoizor*'ed function contains the following API:**
 
 
 
 ### key
 
-Gets store the key for the provided arguments list.    
-You should call this with the **resolved arguments** (i.e. *Memoizor#resolveArguments*).
+Gets store the key for the provided arguments list.
 
 > **Memoizor#key**(args)
 
@@ -330,7 +526,7 @@ const memoized = memoizor(fn);
 const obj = { foo: 'hello', bar: 'world' };          
 memoized(obj);
 
-memoized.key(memoized.resolveArguments([obj])); // Returns the key for the arguments signature [obj]
+memoized.key([obj]); // Returns the key for the arguments signature [obj]
 ```
 
 ---
@@ -339,7 +535,7 @@ memoized.key(memoized.resolveArguments([obj])); // Returns the key for the argum
 
 ### get
 
-Queries the store the the cache associated with the given arguments list. You should call this with the **resolved arguments** (i.e. *Memoizor#resolveArguments*).
+Queries the store the the cache associated with the given arguments list.
 
 > **Memoizor#get**(args)
 
@@ -366,7 +562,7 @@ const memoized = memoizor(fn);
 const obj = { foo: 'hello', bar: 'world' };          
 memoized(obj);
 
-memoized.get(memoized.resolveArguments([obj])); // Returns { foo: 'hello', bar: 'world', baz: 'cat' }
+memoized.get([obj]); // Returns { foo: 'hello', bar: 'world', baz: 'cat' }
 ```
 
 ---
@@ -398,7 +594,7 @@ function fn(obj) { ... }
 const memoized = memoizor(fn);
 
 // Pre-caching the arguments signature [obj]
-memoized.save(memoized.resolveArguments([obj]));
+memoized.save([obj]);
 
 const obj = { foo: 'hello', bar: 'world' };          
 memoized(obj); // Cache hit
@@ -433,7 +629,7 @@ const obj = { foo: 'hello', bar: 'world' };
 memoized(obj);
 
 // Delete cache with the arguments signature [obj]
-memoized.delete(memoized.resolveArguments([obj]));
+memoized.delete([obj]);
 
 memoized(obj); // Cache miss, cache for [obj] was deleted.
 ```
@@ -825,15 +1021,28 @@ Note that some controllers **might not work** with certain function types. For e
 
 - **LocalStorageController**
 
-  The default controller, which stores data in memory, using a plain JS object
+  The default controller, which stores data in memory, using a plain object.    
+  *Works will all function types: sync, callback, and promise.*
+
+- **LocalMapStorageController**
+
+  A variation of the *LocalStorageController*, which stores data in memory, using a [*Map*](#https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map).    
+  *Works will all function types: sync, callback, and promise.*
+
+- **LocalWeakMapStorageController**
+
+  A variation of the *LocalStorageController*, which stores data in memory, using a [*WeakMap*](#https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/WeakMap.)    
+  *Works will all function types: sync, callback, and promise.*
 
 - **FileSystemController**
 
-  An async file system controller that persists memoizor cache between program life cycles and stores cache both in memory and on disk. Cache is loaded from a file when the controller instance is created.
+  An async file system controller that persists memoizor cache between program life cycles and stores cache both in memory and on disk. Cache is loaded from a file when the controller instance is created.    
+  *Only works with callback and promise functions.*
 
 - **FileSystemControllerSync**
 
-  A synchronous version of the FileSystemController.
+  A synchronous version of the FileSystemController.    
+  *Works will all function types: sync, callback, and promise. However, should **not** be used with promises and callback functions as it makes syncronous (blocking) file system calls!*
 
 
 

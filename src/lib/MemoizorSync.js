@@ -36,12 +36,12 @@ export default class MemoizorSync extends Memoizor {
     return (...args) => {
       // Look for cached value
       const resolvedArguments = this.resolveArguments(args);
-      const cached = this.get(resolvedArguments);
+      const cached = this.get(resolvedArguments, true);
       if (cached !== this.NOT_CACHED) return cached;
 
       // No cache, execute the function and store the results
       const results = this.target(...args);
-      this.save(results, resolvedArguments);
+      this.save(results, resolvedArguments, true);
       return results;
     };
   }
@@ -69,9 +69,10 @@ export default class MemoizorSync extends Memoizor {
    * @returns {any} The cached value, if it exists.
    * @memberof MemorizrSync
    */
-  get(args) {
-    const key = this.key(args);
-    const cached = this.onRetrieve(key, args);
+  get(args, resolved = false) {
+    const resolvedArguments = resolved ? args : this.resolveArguments(resolved);
+    const key = this.key(resolvedArguments);
+    const cached = this.onRetrieve(key, resolvedArguments);
     this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== this.NOT_CACHED });
     return cached;
   }
@@ -83,9 +84,10 @@ export default class MemoizorSync extends Memoizor {
    * @returns {any} The cached value, if it exists.
    * @memberof MemorizrSync
    */
-  save(value, args) {
-    const key = this.key(args);
-    this.onSave(key, value, args);
+  save(value, args, resolved = false) {
+    const resolvedArguments = resolved ? args : this.resolveArguments(resolved);
+    const key = this.key(resolvedArguments);
+    this.onSave(key, value, resolvedArguments);
     return value;
   }
 
@@ -95,9 +97,10 @@ export default class MemoizorSync extends Memoizor {
    * @returns {any} The deleted contents.
    * @memberof MemorizrSync
    */
-  delete(args) {
-    const key = this.key(args);
-    return this.onDelete(key, args);
+  delete(args, resolved = false) {
+    const resolvedArguments = resolved ? args : this.resolveArguments(resolved);
+    const key = this.key(resolvedArguments);
+    return this.onDelete(key, resolvedArguments);
   }
 
   /**

@@ -1,21 +1,19 @@
 /**
- * Contains the LocalStorageController class, which is a process-local
- * storage controller that uses a plain object to store memoized results.
+ * Contains the LocalWeakStorageController class, which is a process-local
+ * storage controller that uses a WeakMap() to store memoized results.
  * @file
  */
 
 import StorageController from './StorageController';
 
-const has = Object.prototype.hasOwnProperty;
-
 /**
- * Used to privatize members of the LocalStorageController class.
+ * Used to privatize members of the LocalWeakStorageController class.
  * @type {symbol}
  */
 const ps = Symbol();
 
 /**
- * A process-local, in-memory storage controller that uses a plain object to store memoized
+ * A process-local, in-memory storage controller that a WeakMap() to store memoized
  * execution results.
  * @class LocalWeakMapStorageController
  * @extends {StorageController}
@@ -34,7 +32,7 @@ export default class LocalWeakMapStorageController extends StorageController {
   }
 
   /**
-   * The LocalStorageController save implementation.
+   * The LocalWeakStorageController save implementation.
    * @param {string} key The unique key for the arguments signature.
    * @param {any} value The value produced by the memoized function.
    * @returns {any} The valued passed in.
@@ -46,7 +44,7 @@ export default class LocalWeakMapStorageController extends StorageController {
   }
 
   /**
-   * The LocalStorageController retrieve implementation.
+   * The LocalWeakStorageController retrieve implementation.
    * @param {string} key The unique key for the arguments signature.
    * @returns {undefined}
    * @override
@@ -56,7 +54,7 @@ export default class LocalWeakMapStorageController extends StorageController {
   }
 
   /**
-   * The LocalStorageController delete implementation.
+   * The LocalWeakStorageController delete implementation.
    * @param {string} key The unique key for the arguments signature.
    * @returns {undefined}
    * @override
@@ -68,7 +66,7 @@ export default class LocalWeakMapStorageController extends StorageController {
   }
 
   /**
-   * The LocalStorageController empty implementation.
+   * The LocalWeakStorageController empty implementation.
    * @param {string} key The unique key for the arguments signature.
    * @returns {undefined}
    * @override
@@ -78,7 +76,7 @@ export default class LocalWeakMapStorageController extends StorageController {
   }
 
   /**
-   * The LocalStorageController contents implementation.
+   * The LocalWeakStorageController contents implementation.
    * @returns {MapIterator} A copy of the store contents.
    * @override
    */

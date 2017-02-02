@@ -392,10 +392,10 @@ export default class Memoizor extends EventEmitter {
          * Used by the default keyGenerators
          * @type object
          */
-        cryptoCache: Object.freeze({
+        cryptoCache: {
           hashes: {},
           signatures: {},
-        }),
+        },
 
         // Wrapped and called internally by each subclass
         // e.g. promise, callback, sync
@@ -466,7 +466,7 @@ export default class Memoizor extends EventEmitter {
     // Ensure any ttl/maxRecords/length options are numeric
     ['ttl', 'maxRecords', 'maxArgs', 'LRUPercentPadding', 'LRUHistoryFactor'].forEach((prop) => {
       const parsed = parseInt(options[prop], 10);
-      if (options[prop]) options[prop] = _.isNumber(parsed) ? parsed : undefined;
+      if (options[prop]) options[prop] = _.isNumber(parsed) && !isNaN(parsed) ? parsed : undefined;
     });
 
     // Clamp min values for these options, convert ttl to nanoseconds
@@ -558,7 +558,7 @@ export default class Memoizor extends EventEmitter {
    */
   setStorageController(controller) {
     if (!(controller instanceof StorageController)) {
-      throw new TypeError('The storage controller must be an instance of StorageController');
+      throw new TypeError('Storage controllers must be an instance of StorageController');
     }
 
     this[ps].storage = controller;
@@ -582,10 +582,10 @@ export default class Memoizor extends EventEmitter {
    */
   async key(args) {
     if (this.mode === 'primitive') return args.join('\u0000');
-    if (_.isFunction(this.keyGenerator)) return `${this.uid}${await this.keyGenerator(args)}`;
+    if (_.isFunction(this.keyGenerator)) return this.keyGenerator(this.uid, args);
 
     const finalArgs = this.adjustFinalArguments(args);
-    const signature = await stringifyAsync(finalArgs);
+    const signature = `${this.uid}${await stringifyAsync(finalArgs)}`;
     return this.hashSignature(signature);
   }
 
@@ -637,6 +637,13 @@ export default class Memoizor extends EventEmitter {
    */
   get disable() {
     return this.unmemoize;
+  }
+
+  /**
+   * @returns {boolean} True if enabled, false otherwise.
+   */
+  isEnabled() {
+    return this.callable === this.memoized;
   }
 
   /**

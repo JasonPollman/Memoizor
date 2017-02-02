@@ -16,20 +16,20 @@
     "store",
     "utility"
   ],
-  "homepage": "https://github.com/JasonPollman/Memoizeer",
+  "homepage": "https://github.com/JasonPollman/Memoizor",
   "repository": {
     "type": "git",
-    "url": "https://github.com/JasonPollman/Memoizeer"
+    "url": "https://github.com/JasonPollman/Memoizor"
   },
   "bugs": {
-    "url": "https://github.com/JasonPollman/Memoizeer/issues",
+    "url": "https://github.com/JasonPollman/Memoizor/issues",
     "email": "jason.j.pollman@gmail.com"
   },
   "scripts": {
     "compile": "NODE_ENV=production ./node_modules/.bin/babel src -d dist",
     "lint": "./node_modules/.bin/eslint ./src",
-    "test": "./node_modules/.bin/mocha ./test/unit/**",
-    "coverage": "./node_modules/.bin/nyc ./node_modules/.bin/mocha ./test/unit/**",
+    "test": "NODE_ENV=test ./node_modules/.bin/mocha ./test/unit/**",
+    "coverage": "NODE_ENV=test ./node_modules/.bin/nyc ./node_modules/.bin/mocha ./test/unit/**",
     "prepublish": "npm run compile"
   },
   "devDependencies": {
@@ -66,8 +66,12 @@
     "lodash": "^4.17.4"
   },
   "nyc": {
+    "all": true,
     "include": [
-      "src/*.js"
+      "src/**.js"
+    ],
+    "exclude": [
+      "src/examples"
     ],
     "require": [
       "babel-register"

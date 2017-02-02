@@ -16,11 +16,11 @@ export default class MemoizorPromise extends Memoizor {
    * Creates an instance of MemoizorPromise.
    * @param {function} target The target function to memoize.
    * @param {object} options Options to use in memozing.
-   * @param {string} mode The mode of the target function (callback, promise, or sync).
+   * @param {string} type The type of the target function (callback, promise, or sync).
    * @memberof MemoizorPromise
    */
-  constructor(target, options, mode = 'promise') {
-    super(target, options, mode);
+  constructor(target, options, type = 'promise') {
+    super(target, options, type);
   }
 
   /**
@@ -44,7 +44,7 @@ export default class MemoizorPromise extends Memoizor {
    * @memberof MemorizrPromise
    */
   async get(args, resolved = false) {
-    const resolvedArguments = resolved ? args : this.resolveArguments(resolved);
+    const resolvedArguments = resolved ? args : this.resolveArguments(args);
     const key = await this.key(resolvedArguments);
     const cached = await this.onRetrieve(key, resolvedArguments);
     this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== this.NOT_CACHED });
@@ -59,7 +59,7 @@ export default class MemoizorPromise extends Memoizor {
    * @memberof MemorizrPromise
    */
   async save(value, args, resolved = false) {
-    const resolvedArguments = resolved ? args : this.resolveArguments(resolved);
+    const resolvedArguments = resolved ? args : this.resolveArguments(args);
     const key = await this.key(resolvedArguments);
     await this.onSave(key, value, resolvedArguments);
     return value;
@@ -72,7 +72,7 @@ export default class MemoizorPromise extends Memoizor {
    * @memberof MemorizrPromise
    */
   async delete(args, resolved = false) {
-    const resolvedArguments = resolved ? args : this.resolveArguments(resolved);
+    const resolvedArguments = resolved ? args : this.resolveArguments(args);
     const key = await this.key(resolvedArguments);
     return await this.onDelete(key, resolvedArguments);
   }

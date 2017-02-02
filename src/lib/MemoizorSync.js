@@ -4,7 +4,6 @@
  * @file
  */
 
-import crypto from 'crypto';
 import _ from 'lodash';
 import { stringifySync } from 'json-normalize';
 import Memoizor from './Memoizor';
@@ -20,11 +19,11 @@ export default class MemoizorSync extends Memoizor {
    * Creates an instance of MemoizorPromise.
    * @param {function} target The target function to memoize.
    * @param {object} options Options to use in memozing.
-   * @param {string} mode The mode of the target function (callback, promise, or sync).
+   * @param {string} type The type of the target function (callback, promise, or sync).
    * @memberof MemoizorPromise
    */
-  constructor(target, options, mode = 'sync') {
-    super(target, options, mode);
+  constructor(target, options, type = 'sync') {
+    super(target, options, type);
   }
 
   /**
@@ -54,13 +53,12 @@ export default class MemoizorSync extends Memoizor {
    * @override
    */
   key(args) {
-    if (args.length === 0) return '';
-    if (_.isFunction(this.keyGenerator)) return `${this.uid}${this.keyGenerator(args)}`;
+    if (this.mode === 'primitive') return args.join('\u0000');
+    if (_.isFunction(this.keyGenerator)) return this.keyGenerator(this.uid, args);
 
-    const finalArgs = args.map(arg => (_.isFunction(arg) ? arg.toString() : arg));
-    return crypto.createHash('md5')
-      .update(`${this.uid}${stringifySync(finalArgs)}`)
-      .digest('hex');
+    const finalArgs = this.adjustFinalArguments(args);
+    const signature = `${this.uid}${stringifySync(finalArgs)}`;
+    return this.hashSignature(signature);
   }
 
   /**
@@ -70,7 +68,7 @@ export default class MemoizorSync extends Memoizor {
    * @memberof MemorizrSync
    */
   get(args, resolved = false) {
-    const resolvedArguments = resolved ? args : this.resolveArguments(resolved);
+    const resolvedArguments = resolved ? args : this.resolveArguments(args);
     const key = this.key(resolvedArguments);
     const cached = this.onRetrieve(key, resolvedArguments);
     this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== this.NOT_CACHED });
@@ -85,7 +83,7 @@ export default class MemoizorSync extends Memoizor {
    * @memberof MemorizrSync
    */
   save(value, args, resolved = false) {
-    const resolvedArguments = resolved ? args : this.resolveArguments(resolved);
+    const resolvedArguments = resolved ? args : this.resolveArguments(args);
     const key = this.key(resolvedArguments);
     this.onSave(key, value, resolvedArguments);
     return value;
@@ -98,7 +96,7 @@ export default class MemoizorSync extends Memoizor {
    * @memberof MemorizrSync
    */
   delete(args, resolved = false) {
-    const resolvedArguments = resolved ? args : this.resolveArguments(resolved);
+    const resolvedArguments = resolved ? args : this.resolveArguments(args);
     const key = this.key(resolvedArguments);
     return this.onDelete(key, resolvedArguments);
   }

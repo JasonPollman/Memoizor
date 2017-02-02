@@ -12,6 +12,10 @@ import StorageController from './storage-controllers/StorageController';
 import LocalStorageController from './storage-controllers/LocalStorageController';
 
 const debug = debuggr('memoizor');
+const has = Object.prototype.hasOwnProperty;
+
+let objectUIDS = 0;
+const OBJECT_UID = Symbol();
 
 /**
  * Used to privatize members of the Memoizor class.
@@ -44,13 +48,14 @@ function toNanoseconds(hrtime) {
 function wrapSave(memoizor, controller) {
   return (key, value, args, done) => {
     const mem = memoizor;
-    const { storeKeyFrequencies, maxRecords, LRUPercentPadding, LRUHistoryFactor } = mem;
 
     mem.debug({ method: 'save', function: mem.name, key });
     mem.emit('save', key, value, args);
 
     // If the number of max allowable records is set, adjust if overflowing
-    if (_.isNumber(maxRecords)) {
+    if (_.isNumber(mem.maxRecords)) {
+      const { storeKeyFrequencies, LRUPercentPadding, LRUHistoryFactor } = mem;
+
       if (!storeKeyFrequencies[key]) {
         storeKeyFrequencies[key] = {
           key,
@@ -63,7 +68,7 @@ function wrapSave(memoizor, controller) {
       mem[ps].storeCurrentRecords++;
 
       // Stored records overflow the total allowable
-      if (mem.storeCurrentRecords > maxRecords) {
+      if (mem.storeCurrentRecords > mem.maxRecords) {
         const frequencyList = _.toArray(storeKeyFrequencies);
         const percentPad = LRUPercentPadding || 10;
         const count = frequencyList.length;
@@ -91,7 +96,7 @@ function wrapSave(memoizor, controller) {
       debug('Current records count is: %s', mem.storeCurrentRecords);
     }
 
-    const results = controller.save(key, value, args, memoizor);
+    const results = controller.save(key, value, args, mem);
     if (_.isNumber(mem.ttl)) mem.storeCreated[key] = toNanoseconds(process.hrtime());
     if (_.isFunction(done)) done(null, results);
     return results;
@@ -130,7 +135,7 @@ function wrapRetrieve(memoizor, controller) {
       }
     }
 
-    const results = controller.retrieve(key, args, memoizor);
+    const results = controller.retrieve(key, args, mem);
     mem.emit('retrieved', key, results, args);
     if (_.isFunction(done)) done(null, results);
     return results;
@@ -148,7 +153,7 @@ function wrapDelete(memoizor, controller) {
   return (key, args, done) => {
     const mem = memoizor;
     const { storeKeyFrequencies, maxRecords } = mem;
-    mem.storeCreated[key] = undefined;
+    if (_.isNumber(mem.ttl)) mem.storeCreated[key] = undefined;
 
     mem.debug({ method: 'delete', function: mem.name, key });
     mem.emit('delete', key, args);
@@ -158,8 +163,19 @@ function wrapDelete(memoizor, controller) {
       mem[ps].storeCurrentRecords--;
     }
 
-    const results = controller.delete(key, args, memoizor);
-    mem.emit('deleted', key, results, args);
+    const results = controller.delete(key, args, mem);
+
+    // Remove crypto key cache for this, this also verifies that the store key existed.
+    const signature = mem.cryptoCache.hashes[key];
+
+    if (signature) {
+      mem.cryptoCache.hashes[key] = undefined;
+      mem.cryptoCache.signatures[signature] = undefined;
+
+      mem.debug({ method: 'deleted', function: mem.name, key });
+      mem.emit('deleted', key, results, args);
+    }
+
     if (_.isFunction(done)) done(null, results);
     return results;
   };
@@ -185,7 +201,11 @@ function wrapEmpty(memoizor, controller) {
       mem[ps].storeCurrentRecords = 0;
     }
 
-    const results = controller.empty(memoizor);
+    // Empty the crypto cache
+    mem[ps].cryptoCache.hashes = {};
+    mem[ps].cryptoCache.signatures = {};
+
+    const results = controller.empty(mem);
     if (_.isFunction(done)) done(null, results);
     return results;
   };
@@ -195,7 +215,13 @@ function wrapEmpty(memoizor, controller) {
  * Properties to ignore decorating the Memoize instance with.
  * @type {Array<string>}
  */
-const IGNORED_PROPERTIES = ['wrapStorageController', 'create', 'validateOptions', 'debug'];
+const IGNORED_PROPERTIES = [
+  'wrapStorageController',
+  'create',
+  'validateOptions',
+  'debug',
+  'hashSignature',
+];
 
 /**
  * Used to spread into Object.defineProperties.
@@ -240,7 +266,7 @@ function decorate(RootPrototype, memoizor, target, current) {
 
   Object.defineProperties(decorated, {
     // The type of the function
-    mode: { ...descriptor, value: memoizor.mode },
+    type: { ...descriptor, value: memoizor.type },
     // Add a connection to the memoizor instance.
     memoizor: { ...descriptor, value: memoizor },
   });
@@ -265,11 +291,11 @@ export default class Memoizor extends EventEmitter {
    * Creates an instance of Memoizor.
    * @param {function} target The target function to memoize.
    * @param {object} opts Contains various settings for memoizing the given target.
-   * @param {string} mode The mode of the target function (callback, promise, or sync).
+   * @param {string} type The type of the target function (callback, promise, or sync).
    * @memberof Memoizor
    */
-  constructor(target, opts, mode) {
-    if (!_.isString(mode)) throw new TypeError('Missing type');
+  constructor(target, opts, type) {
+    if (!_.isString(type)) throw new TypeError('Missing type');
     super();
 
     // Validate target argument
@@ -302,7 +328,7 @@ export default class Memoizor extends EventEmitter {
          * The maximum number values allowed to be stored.
          * @type {number}
          */
-        maxRecords: 5000,
+        maxRecords: null,
 
         // Overwrite with user values
         ...options,
@@ -311,7 +337,7 @@ export default class Memoizor extends EventEmitter {
          * The type of the target function (callback, promise, or sync).
          * @type {string}
          */
-        mode,
+        type,
 
         /**
          * The storage mechanism for storing data.
@@ -362,6 +388,15 @@ export default class Memoizor extends EventEmitter {
          */
         storeCreated: {},
 
+        /**
+         * Used by the default keyGenerators
+         * @type object
+         */
+        cryptoCache: Object.freeze({
+          hashes: {},
+          signatures: {},
+        }),
+
         // Wrapped and called internally by each subclass
         // e.g. promise, callback, sync
         onSave: null,
@@ -385,13 +420,11 @@ export default class Memoizor extends EventEmitter {
 
     // Create the memoized target
     const memoized = this.create();
-    const memoizorWrapper = (...args) => {
-      if (this.callable === this.target) return target(...args);
-      return memoized(...args);
-    };
+    const wrapper = (...args) =>
+      (this.callable === this.target ? this.target(...args) : memoized(...args));
 
-    Object.defineProperty(memoizorWrapper, 'name', { value: this.name });
-    this[ps].memoized = this[ps].callable = decorate(Memoizor.prototype, this, memoizorWrapper);
+    Object.defineProperty(wrapper, 'name', { value: this.name });
+    this[ps].memoized = this[ps].callable = decorate(Memoizor.prototype, this, wrapper);
   }
 
   /**
@@ -548,13 +581,12 @@ export default class Memoizor extends EventEmitter {
    * @memberof Memoizor
    */
   async key(args) {
-    if (args.length === 0) return '';
+    if (this.mode === 'primitive') return args.join('\u0000');
     if (_.isFunction(this.keyGenerator)) return `${this.uid}${await this.keyGenerator(args)}`;
 
-    const finalArgs = args.map(arg => (_.isFunction(arg) ? arg.toString() : arg));
-    return crypto.createHash('md5')
-      .update(`${this.uid}${await stringifyAsync(finalArgs)}`)
-      .digest('hex');
+    const finalArgs = this.adjustFinalArguments(args);
+    const signature = await stringifyAsync(finalArgs);
+    return this.hashSignature(signature);
   }
 
   /**
@@ -614,7 +646,8 @@ export default class Memoizor extends EventEmitter {
    * @returns {Array<any>} The processed arguments.
    */
   resolveArguments(args) {
-    const slicedArgs = (_.isNumber(this.maxArgs) ? args.slice(0, this.maxArgs) : args);
+    const params = [...args];
+    const slicedArgs = (_.isNumber(this.maxArgs) ? params.slice(0, this.maxArgs) : args);
     let resolvedArgs = slicedArgs;
 
     // Resolve any arguments using the given coerceArgs functions
@@ -633,5 +666,49 @@ export default class Memoizor extends EventEmitter {
     }
 
     return resolvedArgs;
+  }
+
+  /**
+   * Returns a hash for the given signature
+   * @param {string} signature The signature to hash.
+   * @returns {string} The hex hash.
+   * @memberof Memoizor
+   */
+  hashSignature(signature) {
+    if (this.cryptoCache.signatures[signature]) return this.cryptoCache.signatures[signature];
+    const hash = crypto.createHash('md5').update(signature).digest('hex');
+    this.cryptoCache.signatures[signature] = hash;
+    this.cryptoCache.hashes[hash] = signature;
+    return hash;
+  }
+
+  /**
+   * Adjusts arguments for key serialization.
+   * @param {Array<any>} args The arguments to adjust.
+   * @returns {Arry<any>} The adjusted arguments.
+   */
+  adjustFinalArguments(args) {
+    if (this.mode !== 'reference' && this.mode !== 'dynamic') {
+      // Not reference mode, just map functions to their string values
+      return args.map(arg => (_.isFunction(arg) ? arg.toString() : arg));
+    }
+
+    return args.map((arg) => {
+      // Not an object, return original argument
+      if (!_.isObject(arg)) return arg;
+
+      // Allow plain objects to be "equal"
+      if (this.mode === 'dynamic' && _.isPlainObject(arg)) return arg;
+
+      // Check for object UID, if not attach it
+      if (!has.call(arg, OBJECT_UID)) {
+        Object.defineProperty(arg, OBJECT_UID, {
+          enumerable: false,
+          value: `__MEMOIZE__OBJECT__UID__${objectUIDS++}__`,
+        });
+      }
+
+      return arg[OBJECT_UID];
+    });
   }
 }

@@ -32,10 +32,10 @@ function generateDecorator(fn) {
     const T = Target;
 
     T[key] = function prototypeMethodWrapper(...args) {
-      const wrapper = params => method.apply(this, params);
-      Object.defineProperty(wrapper, 'name', { value: method.name });
+      const bound = method.bind(this);
+      Object.defineProperty(bound, 'name', { value: method.name });
 
-      const memoized = fn(wrapper, options);
+      const memoized = fn(bound, { ...options, parent: this });
       Object.defineProperty(this, key, { ...descriptor, value: memoized });
       return this[key](...args);
     };
@@ -63,6 +63,7 @@ function generateNonDecorator(fn) {
  * @export
  */
 export function promise(target, options) {
+  if (!_.isFunction(target)) throw new TypeError('Cannot memoize non-function!');
   if (has.call(target, 'memoizor')) return target.setOptions(options);
   return new MemoizorPromise(target, options).memoized;
 }
@@ -75,6 +76,7 @@ export function promise(target, options) {
  * @export
  */
 export function callback(target, options) {
+  if (!_.isFunction(target)) throw new TypeError('Cannot memoize non-function!');
   if (has.call(target, 'memoizor')) return target.setOptions(options);
   return new MemoizorCallback(target, options).memoized;
 }
@@ -87,6 +89,7 @@ export function callback(target, options) {
  * @export
  */
 export function sync(target, options) {
+  if (!_.isFunction(target)) throw new TypeError('Cannot memoize non-function!');
   if (has.call(target, 'memoizor')) return target.setOptions(options);
   return new MemoizorSync(target, options).memoized;
 }

@@ -17,20 +17,16 @@ export default class MemoizorCallback extends MemoizorPromise {
    * Creates an instance of MemoizorCallback.
    * @param {function} target The target function to memoize.
    * @param {object} opts Contains various settings for memoizing the given target.
-   * @param {string} mode The mode of the target function (callback, promise, or sync).
+   * @param {string} type The type of the target function (callback, promise, or sync).
    * @memberof MemoizorCallback
    */
-  constructor(target, options = {}, mode = 'callback') {
+  constructor(target, options = {}, type = 'callback') {
     const opts = _.isPlainObject(options) ? options : {};
 
+    // Validate the callback index is a number
     let callbackIndex = parseInt(opts.callbackIndex, 10);
     if (isNaN(callbackIndex) || !isFinite(callbackIndex)) callbackIndex = undefined;
-
-    super(target, {
-      ...opts,
-      // Validate the callback index is a number
-      callbackIndex,
-    }, mode);
+    super(target, { ...opts, callbackIndex }, type);
   }
 
   /**
@@ -47,13 +43,11 @@ export default class MemoizorCallback extends MemoizorPromise {
 
         // Get the list of params with the callback removed.
         const params = [...args];
-        let callback = params.splice(callbackIndex, 1)[0];
+        const callback = params.splice(callbackIndex, 1)[0];
 
         // Hmmm, use didn't provide a proper callback
-        if (!_.isFunction(callback)) {
-          params.push(callback);
-          callback = _.noop;
-        }
+        // Process will hang...
+        if (!_.isFunction(callback)) params.push(callback);
 
         // Look for cached value
         const resolvedArguments = this.resolveArguments(params);
@@ -70,7 +64,8 @@ export default class MemoizorCallback extends MemoizorPromise {
 
         // No cache, execute the function and store the results
         return this.target(...params);
-      })();
+      })()
+      .catch(e => process.nextTick(() => { throw e; }));
     };
   }
 
@@ -83,7 +78,7 @@ export default class MemoizorCallback extends MemoizorPromise {
    */
   async get(args, done, resolved = false) {
     return await new Promise(async (resolve, reject) => {
-      const resolvedArguments = resolved ? args : this.resolveArguments(resolved);
+      const resolvedArguments = resolved ? args : this.resolveArguments(args);
       const key = await this.key(resolvedArguments);
       this.onRetrieve(key, resolvedArguments, (err, cached) => {
         this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== this.NOT_CACHED });
@@ -102,7 +97,7 @@ export default class MemoizorCallback extends MemoizorPromise {
    * @memberof MemorizrCallback
    */
   async save(value, args, done, resolved = false) {
-    const resolvedArguments = resolved ? args : this.resolveArguments(resolved);
+    const resolvedArguments = resolved ? args : this.resolveArguments(args);
     const key = await this.key(resolvedArguments);
     await this.onSave(key, value, resolvedArguments, done);
     return value;
@@ -116,7 +111,7 @@ export default class MemoizorCallback extends MemoizorPromise {
    * @memberof MemorizrCallback
    */
   async delete(args, done, resolved = false) {
-    const resolvedArguments = resolved ? args : this.resolveArguments(resolved);
+    const resolvedArguments = resolved ? args : this.resolveArguments(args);
     const key = await this.key(resolvedArguments);
     return await this.onDelete(key, resolvedArguments, done);
   }

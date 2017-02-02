@@ -212,7 +212,7 @@ function wrapEmpty(memoizor, controller) {
 }
 
 /**
- * Properties to ignore decorating the Memoize instance with.
+ * Properties to ignore decorating the Memoizor memoized function with.
  * @type {Array<string>}
  */
 const IGNORED_PROPERTIES = [
@@ -221,6 +221,7 @@ const IGNORED_PROPERTIES = [
   'validateOptions',
   'debug',
   'hashSignature',
+  'adjustFinalArguments',
 ];
 
 /**
@@ -504,12 +505,15 @@ export default class Memoizor extends EventEmitter {
 
   /**
    * Set options on this Memoizor instance.
-   * @param {object} options An object with options to set.
+   * @param {object} opts An object with options to set.
+   * @param {boolean=} [empty=false] Will empty the store automatically, if truthy.
    * @returns {Memoizor} The current Memoizor instance.
    */
-  setOptions(options, empty = false) {
+  setOptions(opts, empty = false) {
+    let options = opts;
+
     if (_.isPlainObject(options)) {
-      _.merge(this[ps], this.validateOptions({
+      Object.assign(this[ps], this.validateOptions({
         uid: options.uid,
         maxArgs: options.maxArgs,
         ignoreArgs: options.ignoreArgs,
@@ -517,15 +521,23 @@ export default class Memoizor extends EventEmitter {
         maxRecords: options.maxRecords,
         coerceArgs: options.coerceArgs,
       }));
+    }
 
-      // Must purge store if these are changed
-      if (empty && (options.uid || options.keyGenerator || options.coerceArgs)) {
-        const emptyResults = this.empty();
-        if (_.isFunction(emptyResults.then)) return emptyResults.then(() => this.memoized);
-      }
+    // Must purge store if these are changed
+    options = _.isObject(options) ? options : {};
+    if (empty || options.uid || options.keyGenerator || options.coerceArgs) {
+      const emptyResults = this.empty();
+      if (_.isFunction(emptyResults.then)) return emptyResults.then(() => this.memoized);
     }
 
     return this.memoized;
+  }
+
+  /**
+   * @returns An option's value.
+   */
+  getOption(name) {
+    return _.clone(this[ps][name]);
   }
 
   /**

@@ -53,10 +53,13 @@ export default class MemoizorSync extends Memoizor {
    * @override
    */
   key(args) {
-    if (this.mode === 'primitive') return args.join('\u0000');
-    if (_.isFunction(this.keyGenerator)) return this.keyGenerator(this.uid, args);
+    let params = args;
+    if (_.isArguments(params)) params = _.toArray(params);
 
-    const finalArgs = this.adjustFinalArguments(args);
+    if (this.mode === 'primitive') return params.join('\u0000');
+    if (_.isFunction(this.keyGenerator)) return this.keyGenerator(this.uid, params);
+
+    const finalArgs = this.adjustFinalArguments(params);
     const signature = `${this.uid}${stringifySync(finalArgs)}`;
     return this.hashSignature(signature);
   }
@@ -68,7 +71,10 @@ export default class MemoizorSync extends Memoizor {
    * @memberof MemorizrSync
    */
   get(args, resolved = false) {
-    const resolvedArguments = resolved ? args : this.resolveArguments(args);
+    let params = args;
+    if (_.isArguments(params)) params = _.toArray(params);
+
+    const resolvedArguments = resolved ? params : this.resolveArguments(params);
     const key = this.key(resolvedArguments);
     const cached = this.onRetrieve(key, resolvedArguments);
     this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== this.NOT_CACHED });
@@ -83,7 +89,10 @@ export default class MemoizorSync extends Memoizor {
    * @memberof MemorizrSync
    */
   save(value, args, resolved = false) {
-    const resolvedArguments = resolved ? args : this.resolveArguments(args);
+    let params = args;
+    if (_.isArguments(params)) params = _.toArray(params);
+
+    const resolvedArguments = resolved ? params : this.resolveArguments(params);
     const key = this.key(resolvedArguments);
     this.onSave(key, value, resolvedArguments);
     return value;
@@ -96,7 +105,10 @@ export default class MemoizorSync extends Memoizor {
    * @memberof MemorizrSync
    */
   delete(args, resolved = false) {
-    const resolvedArguments = resolved ? args : this.resolveArguments(args);
+    let params = args;
+    if (_.isArguments(params)) params = _.toArray(params);
+
+    const resolvedArguments = resolved ? params : this.resolveArguments(params);
     const key = this.key(resolvedArguments);
     return this.onDelete(key, resolvedArguments);
   }

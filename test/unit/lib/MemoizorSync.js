@@ -28,6 +28,11 @@ describe('MemoizorSync Class', () => {
       expect(memoizor.key([1, 2, 3])).to.equal('3ba716572eead25867d675b77fd911f0');
     });
 
+    it('Should return a basic string if options.mode === "primitive"', () => {
+      memoizor = new MemoizorSync(x => x * 2, { mode: 'primitive' });
+      expect(memoizor.key([1, 2, 3])).to.equal('1\u00002\u00003');
+    });
+
     it('Should be overridden by options.keyGenerator', () => {
       memoizor = new MemoizorSync(x => x * 2, {
         keyGenerator: (uid, args) => {
@@ -77,5 +82,30 @@ describe('MemoizorSync Class', () => {
       expect(memoized(7)).to.equal(14);
       expect(memoized(9)).to.equal(18);
     });
+
+    it('Should delete cache items after their ttl expires', (done) => {
+      const memoizor2 = new MemoizorSync(x => x * 2, { ttl: 500 });
+      memoizor2.memoized(2);
+      memoizor2.memoized(2);
+      memoizor2.memoized(2);
+      memoizor2.memoized(2);
+
+      memoizor2.on('deleted', (key, result, args) => {
+        try {
+          expect(key).to.be.a('string');
+          expect(result).to.equal(4);
+          expect(args).to.eql([2]);
+          expect(memoizor2.storeContents()).to.eql({});
+        } catch (e) {
+          return done(e);
+        }
+
+        return done();
+      });
+
+      expect(Object.keys(memoizor2.storeContents()).length).to.equal(1);
+      setTimeout(() => memoizor2.memoized(2), 500);
+    })
+    .timeout(2000).slow(1500);
   });
 });

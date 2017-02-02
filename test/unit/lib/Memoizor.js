@@ -258,12 +258,106 @@ describe('Memoizor Class', () => {
       });
 
       it('Should set ttl to a number if a numeric value was passed', () => {
-        const expected = [60, 60, 60, 100, 8000];
+        const expected = [60, 60, 60, 100, 8000, 60, 60, 1000];
 
-        [0, 1, -1, 100, 8000].forEach((item, idx) => {
+        [0, 1, -1, 100, 8000, '60', '0', '1000'].forEach((item, idx) => {
           const memoizor = new MemoizorSync(() => this, { ttl: item });
           expect(memoizor.ttl).to.equal(expected[idx] * 1e6);
         });
+      });
+    });
+
+    describe('maxRecords', () => {
+      it('Should set maxRecords to undefined if non-numeric', () => {
+        ['string', [], {}, () => {}, null].forEach((item) => {
+          const memoizor = new MemoizorSync(() => this, { maxRecords: item });
+          expect(memoizor.maxRecords).to.be.oneOf([null, undefined]);
+        });
+      });
+
+      it('Should set maxRecords to a number if a numeric value was passed', () => {
+        const expected = [0, 1, 0, 100, 8000, 60, 0, 1000];
+
+        [0, 1, -1, 100, 8000, '60', '0', '1000'].forEach((item, idx) => {
+          const memoizor = new MemoizorSync(() => this, { maxRecords: item });
+          expect(memoizor.maxRecords).to.equal(expected[idx]);
+        });
+      });
+    });
+
+    describe('maxArgs', () => {
+      it('Should set maxArgs to undefined if non-numeric', () => {
+        ['string', [], {}, () => {}, null].forEach((item) => {
+          const memoizor = new MemoizorSync(() => this, { maxArgs: item });
+          expect(memoizor.maxArgs).to.be.oneOf([null, undefined]);
+        });
+      });
+
+      it('Should set maxArgs to a number if a numeric value was passed', () => {
+        const expected = [1, 1, 1, 100, 8000, 60, 1, 1000];
+
+        [0, 1, -1, 100, 8000, '60', '0', '1000'].forEach((item, idx) => {
+          const memoizor = new MemoizorSync(() => this, { maxArgs: item });
+          expect(memoizor.maxArgs).to.equal(expected[idx]);
+        });
+      });
+    });
+
+    describe('LRUPercentPadding', () => {
+      it('Should set LRUPercentPadding to undefined if non-numeric', () => {
+        ['string', [], {}, () => {}, null].forEach((item) => {
+          const memoizor = new MemoizorSync(() => this, { LRUPercentPadding: item });
+          expect(memoizor.LRUPercentPadding).to.be.oneOf([null, undefined]);
+        });
+      });
+
+      it('Should set LRUPercentPadding to a number if a numeric value was passed', () => {
+        const expected = [1, 1, 1, 100, 8000, 60, 1, 1000];
+
+        [0, 1, -1, 100, 8000, '60', '0', '1000'].forEach((item, idx) => {
+          const memoizor = new MemoizorSync(() => this, { LRUPercentPadding: item });
+          expect(memoizor.LRUPercentPadding).to.equal(expected[idx]);
+        });
+      });
+    });
+
+    describe('ignoreArgs', () => {
+      it('Should throw if options.ignoreArgs is defined and isn\'t an array', () => {
+        [1, () => {}, null, {}, class Foo {}].forEach((item) => {
+          assert.throws(
+            () => new MemoizorSync(() => {}, { ignoreArgs: item }),
+            'Memoizor: options.ignoreArgs must be an array!');
+        });
+      });
+
+      it('Should validate that all of the members of options.ignoreArgs are numeric', () => {
+        const items = [1, () => {}, null, {}, class Foo {}, Number.MAX_VALUE];
+        assert.throws(
+            () => new MemoizorSync(() => {}, { ignoreArgs: items }),
+            'Values of options.ignoreArgs must be finite numbers!');
+      });
+
+      it('Should convert all members fo options.ignoreArgs to numbers', () => {
+        const items = ['1', 1, '0', '100'];
+        const memoized = new MemoizorSync(() => {}, { ignoreArgs: items });
+        expect(memoized.ignoreArgs).to.eql([1, 1, 0, 100]);
+      });
+    });
+
+    describe('coerceArgs', () => {
+      it('Should throw if options.coerceArgs is defined and isn\'t a function or array', () => {
+        [1, null, {}, 'string'].forEach((item) => {
+          assert.throws(
+            () => new MemoizorSync(() => {}, { coerceArgs: item }),
+            'The "coerceArgs" option must be a function or an array of types: [function, null, undefined]!');
+        });
+      });
+
+      it('Should validate that all of the members of options.coerceArgs are functions', () => {
+        const items = [1, () => {}, null, {}, class Foo {}, Number.MAX_VALUE];
+        assert.throws(
+            () => new MemoizorSync(() => {}, { coerceArgs: items }),
+            'The "coerceArgs" option must be a function or an array of types: [function, null, undefined]!');
       });
     });
 
@@ -285,6 +379,60 @@ describe('Memoizor Class', () => {
             'Memoizor: options.keyGenerator must be a function!');
         });
       });
+    });
+  });
+
+  describe('Memoizor#setOptions', () => {
+    it('Should set and validate options', () => {
+      const memoizor = new MemoizorSync(() => {});
+      expect(memoizor.getOption('ttl')).to.equal(undefined);
+      expect(memoizor.setOptions({ ttl: 1000 })).to.equal(memoizor.memoized);
+      expect(memoizor.getOption('ttl')).to.equal(1000 * 1e6);
+    });
+
+    it('Should clear the store if the "clear" argument is true', () => {
+      const memoizor = new MemoizorSync((a, b) => (a + b));
+      memoizor.memoized(1, 2);
+      memoizor.memoized(3, 4);
+
+      expect(memoizor.storeContents()).to.eql({
+        '30b823434ce87fd37b94ff3363d0ff9d': 3,
+        b34820008f9ded2fc269268f8be1394b: 7,
+      });
+
+      expect(memoizor.setOptions({ ttl: 3000 }, true)).to.equal(memoizor.memoized);
+      expect(memoizor.storeContents()).to.eql({});
+    });
+
+    const newValues = [() => {}, () => {}, 'string'];
+    ['keyGenerator', 'coerceArgs', 'uid'].forEach((option, idx) => {
+      it(`Should clear the store if "${option}" option is changed`, () => {
+        const memoizor = new MemoizorSync((a, b) => (a + b));
+        memoizor.memoized(1, 2);
+        memoizor.memoized(3, 4);
+
+        expect(memoizor.storeContents()).to.eql({
+          '30b823434ce87fd37b94ff3363d0ff9d': 3,
+          b34820008f9ded2fc269268f8be1394b: 7,
+        });
+
+        expect(memoizor.setOptions({ [option]: newValues[idx] })).to.equal(memoizor.memoized);
+        expect(memoizor.storeContents()).to.eql({});
+      });
+    });
+
+    it('Should do nothing if options isn\t an object', () => {
+      const memoizor = new MemoizorSync((a, b) => (a + b));
+      memoizor.memoized(1, 2);
+      memoizor.memoized(3, 4);
+
+      expect(memoizor.storeContents()).to.eql({
+        '30b823434ce87fd37b94ff3363d0ff9d': 3,
+        b34820008f9ded2fc269268f8be1394b: 7,
+      });
+
+      expect(memoizor.setOptions('whatever', true)).to.equal(memoizor.memoized);
+      expect(memoizor.storeContents()).to.eql({});
     });
   });
 });

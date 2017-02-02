@@ -77,8 +77,11 @@ export default class MemoizorCallback extends MemoizorPromise {
    * @memberof MemorizrSync
    */
   async get(args, done, resolved = false) {
+    let params = args;
+    if (_.isArguments(params)) params = _.toArray(params);
+
     return await new Promise(async (resolve, reject) => {
-      const resolvedArguments = resolved ? args : this.resolveArguments(args);
+      const resolvedArguments = resolved ? params : this.resolveArguments(params);
       const key = await this.key(resolvedArguments);
       this.onRetrieve(key, resolvedArguments, (err, cached) => {
         this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== this.NOT_CACHED });
@@ -97,7 +100,10 @@ export default class MemoizorCallback extends MemoizorPromise {
    * @memberof MemorizrCallback
    */
   async save(value, args, done, resolved = false) {
-    const resolvedArguments = resolved ? args : this.resolveArguments(args);
+    let params = args;
+    if (_.isArguments(params)) params = _.toArray(params);
+
+    const resolvedArguments = resolved ? params : this.resolveArguments(params);
     const key = await this.key(resolvedArguments);
     await this.onSave(key, value, resolvedArguments, done);
     return value;
@@ -111,7 +117,10 @@ export default class MemoizorCallback extends MemoizorPromise {
    * @memberof MemorizrCallback
    */
   async delete(args, done, resolved = false) {
-    const resolvedArguments = resolved ? args : this.resolveArguments(args);
+    let params = args;
+    if (_.isArguments(params)) params = _.toArray(params);
+
+    const resolvedArguments = resolved ? params : this.resolveArguments(params);
     const key = await this.key(resolvedArguments);
     return await this.onDelete(key, resolvedArguments, done);
   }

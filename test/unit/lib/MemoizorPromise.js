@@ -32,4 +32,46 @@ describe('MemoizorPromise Class', () => {
       })();
     });
   });
+
+  describe('Memoizor#setOptions', () => {
+    it('Should set and validate options', async () => {
+      const memoizor = new MemoizorPromise(() => {});
+      expect(memoizor.getOption('ttl')).to.equal(undefined);
+      expect(await memoizor.setOptions({ ttl: 1000 })).to.equal(memoizor.memoized);
+      expect(memoizor.getOption('ttl')).to.equal(1000 * 1e6);
+    });
+
+    it('Should clear the store if the "clear" argument is true', async () => {
+      const memoizor = new MemoizorPromise((a, b) => (a + b));
+      await memoizor.memoized(1, 2);
+      await memoizor.memoized(3, 4);
+
+      expect(memoizor.storeContents()).to.eql({
+        '30b823434ce87fd37b94ff3363d0ff9d': 3,
+        b34820008f9ded2fc269268f8be1394b: 7,
+      });
+
+      expect(await memoizor.setOptions({ ttl: 3000 }, true)).to.equal(memoizor.memoized);
+      expect(memoizor.storeContents()).to.eql({});
+    });
+
+    const newValues = [() => {}, () => {}, 'string'];
+    ['keyGenerator', 'coerceArgs', 'uid'].forEach((option, idx) => {
+      it(`Should clear the store if "${option}" option is changed`, async () => {
+        const memoizor = new MemoizorPromise((a, b) => (a + b));
+        await memoizor.memoized(1, 2);
+        await memoizor.memoized(3, 4);
+
+        expect(memoizor.storeContents()).to.eql({
+          '30b823434ce87fd37b94ff3363d0ff9d': 3,
+          b34820008f9ded2fc269268f8be1394b: 7,
+        });
+
+        const promise = memoizor.setOptions({ [option]: newValues[idx] });
+        expect(promise.then).to.be.a('function');
+        expect(await promise).to.equal(memoizor.memoized);
+        expect(memoizor.storeContents()).to.eql({});
+      });
+    });
+  });
 });

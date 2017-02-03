@@ -28,6 +28,15 @@ describe('MemoizorSync Class', () => {
       expect(memoizor.key([1, 2, 3])).to.equal('3ba716572eead25867d675b77fd911f0');
     });
 
+    it('Should return an md5 key hash by default (using arguments object)', () => {
+      memoizor = new MemoizorSync(x => x * 2);
+      (function foobar() {
+        /* eslint-disable prefer-rest-params */
+        expect(memoizor.key(arguments)).to.equal('3ba716572eead25867d675b77fd911f0');
+        /* eslint-enable prefer-rest-params */
+      }(1, 2, 3));
+    });
+
     it('Should return a basic string if options.mode === "primitive"', () => {
       memoizor = new MemoizorSync(x => x * 2, { mode: 'primitive' });
       expect(memoizor.key([1, 2, 3])).to.equal('1\u00002\u00003');
@@ -42,6 +51,88 @@ describe('MemoizorSync Class', () => {
         },
       });
       expect(memoizor.key([1, 2, 3])).to.equal('key');
+    });
+  });
+
+  describe('MemoizorSync#delete', () => {
+    let memoizor;
+    let memoized;
+
+    beforeEach(() => {
+      memoizor = new MemoizorSync(x => x * 2);
+      memoized = memoizor.memoized;
+    });
+
+    it('Should delete cached items', () => {
+      memoized(4);
+      expect(Object.keys(memoized.storeContents()).length).to.equal(1);
+      memoized.delete([4]);
+      expect(Object.keys(memoized.storeContents()).length).to.equal(0);
+    });
+
+    it('Should delete cached items (using arguments object)', () => {
+      memoized(4);
+      expect(Object.keys(memoized.storeContents()).length).to.equal(1);
+      (function foo() { memoized.delete(arguments); }(4)); // eslint-disable-line prefer-rest-params
+      expect(Object.keys(memoized.storeContents()).length).to.equal(0);
+    });
+  });
+
+  describe('MemoizorSync#save', () => {
+    let memoizor;
+    let memoized;
+
+    beforeEach(() => {
+      memoizor = new MemoizorSync(x => x * 2);
+      memoized = memoizor.memoized;
+    });
+
+    it('Should add cached items', () => {
+      expect(Object.keys(memoized.storeContents()).length).to.equal(0);
+      memoized.save('foobar', [4]);
+      expect(Object.keys(memoized.storeContents()).length).to.equal(1);
+      expect(memoized(4)).to.equal('foobar');
+    });
+
+    it('Should add cached items (using arguments object)', () => {
+      expect(Object.keys(memoized.storeContents()).length).to.equal(0);
+      (function foo() { memoized.save('foobar', arguments); }(4)); // eslint-disable-line prefer-rest-params
+      expect(Object.keys(memoized.storeContents()).length).to.equal(1);
+      expect(memoized(4)).to.equal('foobar');
+    });
+  });
+
+  describe('MemoizorSync#get', () => {
+    let memoizor;
+    let memoized;
+
+    beforeEach(() => {
+      memoizor = new MemoizorSync(x => x * 2);
+      memoized = memoizor.memoized;
+    });
+
+    it('Should retrieve cached items', () => {
+      expect(Object.keys(memoized.storeContents()).length).to.equal(0);
+      memoized.save('foobar', [4]);
+      memoized(1);
+      memoized(1, 2);
+      expect(Object.keys(memoized.storeContents()).length).to.equal(3);
+      expect(memoized.get([1])).to.equal(2);
+      expect(memoized.get([1, 2])).to.equal(2);
+      expect(memoized.get([4])).to.equal('foobar');
+    });
+
+    it('Should retrieve cached items (using arguments object)', () => {
+      expect(Object.keys(memoized.storeContents()).length).to.equal(0);
+      memoized.save('foobar', [4]);
+      memoized(1);
+      memoized(1, 2);
+      expect(Object.keys(memoized.storeContents()).length).to.equal(3);
+
+      /* eslint-disable prefer-rest-params */
+      expect(function foo() { return memoized.get(arguments); }(1)).to.equal(2);
+      expect(function foo() { return memoized.get(arguments); }(1, 2)).to.equal(2);
+      expect(function foo() { return memoized.get(arguments); }(4)).to.equal('foobar');
     });
   });
 

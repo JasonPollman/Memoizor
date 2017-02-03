@@ -27,22 +27,38 @@ const descriptor = {
  * @returns {function} A decorator function.
  */
 function generateDecorator(fn) {
-  return options => (Target, key) => {
-    const method = Target[key];
-    const T = Target;
+  return function memoizorDecorator(optionsOrTarget, property, definition) {
+    const decorator = (Target, key) => {
+      const method = Target[key];
+      const T = Target;
 
-    T[key] = function prototypeMethodWrapper(...args) {
-      const bound = method.bind(this);
-      Object.defineProperty(bound, 'name', { value: method.name });
+      if (!has.call(Target, key)) {
+        throw new ReferenceError(`Memoizor: Constructor contains no property  "${key}"`);
+      }
 
-      const memoized = fn(bound, { ...options, parent: this });
-      Object.defineProperty(this, key, { ...descriptor, value: memoized });
-      return this[key](...args);
+      if (!_.isFunction(method)) {
+        throw new TypeError(`Memoizor: Expected a function for constructor property "${key}"`);
+      }
+
+      T[key] = function prototypeMethodWrapper(...args) {
+        const bound = method.bind(this);
+        Object.defineProperty(bound, 'name', { value: method.name });
+
+        const memoized = fn(bound, { ...optionsOrTarget, parent: this });
+        Object.defineProperty(this, key, { ...descriptor, value: memoized });
+        return this[key](...args);
+      };
+
+      // Rename the prptotype wrapper function to its original name
+      Object.defineProperty(T[key], 'name', { value: method.name });
+      return Target;
     };
 
-    // Rename the prptotype wrapper function to its original name
-    Object.defineProperty(T[key], 'name', { value: method.name });
-    return Target;
+    // Determine if the decorator was "called with arguments",
+    // or just plainly decoratored without invoking
+    return _.isObject(definition) && definition.value === optionsOrTarget[property]
+      ? decorator(optionsOrTarget, property, definition)
+      : decorator;
   };
 }
 
@@ -154,8 +170,9 @@ Object.assign(memoizeMethod, {
 export const async = promise;
 export const cb = callback;
 
-// Export all storage controllers
+// Export all storage controllers and the memoize decorator
 Object.assign(exports, controllers);
 
 // Export sync version by default
 export default sync;
+Object.assign(sync, exports);

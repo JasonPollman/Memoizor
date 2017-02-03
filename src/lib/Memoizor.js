@@ -593,10 +593,11 @@ export default class Memoizor extends EventEmitter {
    * @memberof Memoizor
    */
   async key(args) {
-    if (this.mode === 'primitive') return args.join('\u0000');
-    if (_.isFunction(this.keyGenerator)) return this.keyGenerator(this.uid, args);
+    const params = _.isArguments(args) ? _.toArray(args) : args;
+    if (this.mode === 'primitive') return params.join('\u0000');
+    if (_.isFunction(this.keyGenerator)) return this.keyGenerator(this.uid, params);
 
-    const finalArgs = this.adjustFinalArguments(args);
+    const finalArgs = this.adjustFinalArguments(params);
     const signature = `${this.uid}${await stringifyAsync(finalArgs)}`;
     return this.hashSignature(signature);
   }
@@ -665,8 +666,9 @@ export default class Memoizor extends EventEmitter {
    * @returns {Array<any>} The processed arguments.
    */
   resolveArguments(args) {
-    const params = [...args];
-    const slicedArgs = (_.isNumber(this.maxArgs) ? params.slice(0, this.maxArgs) : args);
+    if (!Array.isArray(args)) return [];
+
+    const slicedArgs = (_.isNumber(this.maxArgs) ? args.slice(0, this.maxArgs) : [...args]);
     let resolvedArgs = slicedArgs;
 
     // Resolve any arguments using the given coerceArgs functions

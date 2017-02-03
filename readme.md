@@ -1,14 +1,14 @@
 # Memoizor
 
-> A feature rich and easy to use memoization/caching library with an emphasis on both percision and performance.
+> A feature rich and easy to use memoization/caching library with an emphasis on both precision and performance.
 
 
 
 ## Features
 
 - Works with *any* argument type.
-- Argument signatures are serialized so that object key ordering **doesn't** affect cache retrevial.
-- Works with [**syncronous**](#syncronous-functions), [**promise**](#promise-returning-functions), and [**callback**](#callback-functions) functions.
+- Argument signatures are serialized so that object key ordering **doesn't** affect cache retrieval.
+- Works with [**synchronous**](#synchronous-functions), [**promise**](#promise-returning-functions), and [**callback**](#callback-functions) functions.
 - Works with [**prototype methods**](#memoizing-class-methods).
 - Can automatically delete cache after a given time (**[ttl](#ttl)**).
 - Can [**ignore**](#ignoreargs) specific arguments or set the [**maximum**](#maxargs) number of arguments considered when caching.
@@ -33,7 +33,7 @@ npm install memoizor --save
 
 ## Basic Usage
 
-### Syncronous Functions
+### Synchronous Functions
 
 > **Memoizor.sync**(target[, options])
 
@@ -90,7 +90,7 @@ fn(arg, () => {}); // Probably *not* cached yet, since (for callbacks) caching i
 You can specify the *index* of the callback argument using *options.callbackIndex*. If *options.callbackIndex* is either unspecified or a non-numeric value, the **last argument passed** is assumed.
 
 ```js
-// Providing the callback as the first arugment is unconventional and discouraged,
+// Providing the callback as the first argument is unconventional and discouraged,
 // but this is a silly contrived example anyways. :P
 
 function sum(done, ...nums) {
@@ -115,7 +115,7 @@ sumMemoized((results) => {    // 1st call, function is executed
 
 2. [**Basic Usage**](#basic-usage)
 
-   - [Memoizing Syncronous Functions](#syncronous-functions)
+   - [Memoizing Synchronous Functions](#synchronous-functions)
    - [Memoizing Promise Functions](#promise-returning-functions)
    - [Memoizing Callback Functions](#callback-functions)
 
@@ -185,7 +185,7 @@ memoized(1);             // Different argument signature, cache miss, function e
 
 > options.ignoreArgs =  *{Array\<number>}*
 
-Ignores the arguments with the given **indicies**. This option *must be an array of numeric values*.
+Ignores the arguments with the given **indices**. This option *must be an array of numeric values*.
 
 ```js
 const memoized = memoizor(fn, { ignoreArgs: [0, 1] });
@@ -220,11 +220,11 @@ memoized();            // Cache hit
 
 **Coerces arguments before passing them to the key generator and store**
 
-If *coerceArgs* is a function, it will be called with each argument. If *coerceArgs* is an array, the function correspoding to the index of the argument will be called.
+If *coerceArgs* is a function, it will be called with each argument. If *coerceArgs* is an array, the function corresponding to the index of the argument will be called.
 
 Each *coerceArgs* function is called with two arguments: *arg* and *index* where *arg* is the argument and *index* is the index of the argument, respectively.
 
-**Note: this only applies to the memoization of the function, the original arguments are still passed to the oirginal function if no cached value was found.**
+**Note: this only applies to the memoization of the function, the original arguments are still passed to the original function if no cached value was found.**
 
 ```js
 const fn = memoizor(fn, {
@@ -337,7 +337,7 @@ uid = JSON.stringify({
 
 Which guarantees that the store keys will be unique to the *current application* and all functions with the name *name*.
 
-Since store cache is local to each function, **collisions are not possible when using Memoizor within a single process.** However, if running multiple processes while using Memoizor and a distributed store, collsions **are** possible if you memoize multiple functions with the same name (note that anonymous functions recieve the name "anonymous").
+Since store cache is local to each function, **collisions are not possible when using Memoizor within a single process.** However, if running multiple process while using Memoizor and/or using a distributed store, collisions **are** possible if you memoize multiple functions with the same name (note that anonymous functions receive the name "anonymous").
 
 *If that's the case, you might want to set this accordingly.*
 
@@ -424,7 +424,7 @@ class MyClass {
     ...
   }
   
-  syncronousMethod() {
+  synchronousMethod() {
     ...
   }
   
@@ -439,7 +439,7 @@ class MyClass {
 
 // Memoize each method...
 // Now *every instance* will get it's own memoized version of each function.
-memoizeMethod.sync(MyClass.prototype, 'syncronousMethod', { /* options */ });
+memoizeMethod.sync(MyClass.prototype, 'synchronousMethod', { /* options */ });
 memoizeMethod.promise(MyClass.prototype, 'promiseMethod', { /* options */ });
 memoizeMethod.callback(MyClass.prototype, 'callbackMethod', { /* options */ });
     
@@ -493,9 +493,9 @@ class MyClass {
     ...
   }
   
-  // Decorates syncronous functions:
+  // Decorates synchronous functions:
   @memoize({ /* options */ })
-  syncronousMethod() {
+  synchronousMethod() {
     ...
   }
   
@@ -567,7 +567,7 @@ The arguments signature to lookup the cached value of.
 
 *{any|Promise}* For *memoizor.sync* based functions, the value associated with the given arguments signature. For *memoizor.callback* and *memoizor.promise* based functions, a promise that resolves with the value.
 
-Note if ``value === memoizor.NOT_CACHED``, it incidates the value didn't exist in the store.
+Note if ``value === memoizor.NOT_CACHED``, it indicates the value didn't exist in the store.
 
 ```js
 import memoizor from 'memoizor';
@@ -762,7 +762,7 @@ memoized(obj); // Cache hit.
 
 ### resolveArguments
 
-Adjusts the given arugment array based on the current options set.
+Adjusts the given argument array based on the current options set.
 
 > **Memoizor#resolveArguments**(args)
 
@@ -1030,7 +1030,7 @@ Each storage controller must extend **memoizor.StorageController** and implement
 
 Storage Controllers allow you to do things like use the file system to persist cache between processes (**FileSystemController** and **FileSystemControllerSync**) or use an API to POST to a database somewhere.
 
-Note that some controllers **might not work** with certain function types. For example, the **FileSystemController** should not be used with syncronous functions, as it makes asyncronous file system function calls. The default controller works for all three function types (sync, callback, and promise).
+Note that some controllers **might not work** with certain function types. For example, the **FileSystemController** should not be used with synchronous functions, as it makes asynchronous file system function calls. The default controller works for all three function types (sync, callback, and promise).
 
 #### Memoizor comes with the following built in controllers:
 
@@ -1061,13 +1061,13 @@ Note that some controllers **might not work** with certain function types. For e
 - **FileSystemControllerSync**
 
   A synchronous version of the FileSystemController.    
-  *Works will all function types: sync, callback, and promise. However, should **not** be used with promises and callback functions as it makes syncronous (blocking) file system calls!*
+  *Works will all function types: sync, callback, and promise. However, should **not** be used with promises and callback functions as it makes synchronous (blocking) file system calls!*
 
 
 
 ### Building Your Own Controllers
 
-Simply subclass *memoizor.StorageController* and implement the methods shown in the template below. If you're building a controller for a **syncronous** function, the methods below must be synchronous, otherwise you're free to use async functions or return promises.
+Simply subclass *memoizor.StorageController* and implement the methods shown in the template below. If you're building a controller for a **synchronous** function, the methods below must be synchronous, otherwise you're free to use async functions or return promises.
 
 **Note: You must return the symbol ``memoizor.NOT_CACHED`` if retrieve() yields no cache. Returning ``undefined`` will assume a call to the function with the given arguments signature returned undefined.**
 

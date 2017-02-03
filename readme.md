@@ -12,10 +12,10 @@
 - Works with [**prototype methods**](#memoizing-class-methods).
 - Can automatically delete cache after a given time (**[ttl](#ttl)**).
 - Can [**ignore**](#ignoreargs) specific arguments or set the [**maximum**](#maxargs) number of arguments considered when caching.
-- Can **[coerce arguments](#coerceArgs)** before they're passed in to the original function.
+- Can **[coerce arguments](#coerceargs)** before they're passed in to the original function.
 - Can set the [**maximum number of records**](#maxrecords) allowed to be cached.
 - Can memoize multiple functions at once using an [**object or array**](#memoizing-multiple-functions).
-- Uses [**storage controller**](#storagecontrollers) objects to define cache *CRUD* mechanisms.
+- Uses [**storage controller**](#storage-controllers) objects to define cache *CRUD* mechanisms.
 - Has an [**object reference mode**](#object-reference-mode) to compare arguments using ``===`` rather than using serialization.
 - Storage controllers can use the file system, HTTP, or just about any other mechanism  to preload cache.
 - Works with node's *cluster* module for multi-process memoization.

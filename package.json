@@ -1,10 +1,9 @@
 {
   "name": "@jasonpollman/memoizor",
   "version": "1.0.0",
-  "description": "Awesomely simple memoize library with distributed capabilities.",
+  "description": "Awesomely simple memoization/caching library with distributed capabilities",
   "license": "ISC",
   "main": "dist/",
-  "private": true,
   "author": {
     "name": "Jason James Pollman",
     "email": "jason.j.pollman@gmail.com"

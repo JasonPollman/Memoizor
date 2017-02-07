@@ -2,7 +2,7 @@
   "name": "@jasonpollman/memoizor",
   "version": "1.0.0",
   "description": "Awesomely simple memoization/caching library with distributed capabilities",
-  "license": "ISC",
+  "license": "UNLICENSED",
   "main": "dist/",
   "author": {
     "name": "Jason James Pollman",

@@ -63,7 +63,7 @@ const fn = memoizor.promise(myFunction);
 fn(arg)                  // 1st call, function is executed.
   .then(res => fn(arg))  // 2nd call, same argument signature, cache hit.
 
-fn(arg) // Probably *not* cached yet, since (for promises) caching is async.
+fn(arg) // Probably *not* cached yet, since first call was async
   .then(res => {});
 ```
 
@@ -82,7 +82,7 @@ fn(arg, () => {       // 1st call, function is executed.
   fn(arg, () => {});  // 2nd call, same argument signature, cache hit
 });
 
-fn(arg, () => {}); // Probably *not* cached yet, since (for callbacks) caching is async.
+fn(arg, () => {}); // Probably *not* cached yet, since first call was async.
 ```
 
 #### Specifying the Callback Argument

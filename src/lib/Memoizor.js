@@ -38,6 +38,12 @@ function toNanoseconds(hrtime) {
   return (hrtime[0] * 1e9) + hrtime[1];
 }
 
+function invokeIfExists(results, done) {
+  if (!_.isFunction(done)) return null;
+  if (_.isFunction(results.then)) return results.then(res => done(null, res)).catch(done);
+  return done(null, results);
+}
+
 /**
  * Wraps the store save function to account for timeouts.
  * @param {Memoizor} memorizr The Memoizor instance associated with the memoized function.
@@ -97,8 +103,9 @@ function wrapSave(memoizor, controller) {
     }
 
     const results = controller.save(key, value, args, mem);
+
     if (_.isNumber(mem.ttl)) mem.storeCreated[key] = toNanoseconds(process.hrtime());
-    if (_.isFunction(done)) done(null, results);
+    invokeIfExists(results, done);
     return results;
   };
 }
@@ -135,10 +142,15 @@ function wrapRetrieve(memoizor, controller) {
       }
     }
 
-    const results = controller.retrieve(key, args, mem);
-    mem.emit('retrieved', key, results, args);
-    if (_.isFunction(done)) done(null, results);
-    return results;
+    try {
+      const results = controller.retrieve(key, args, mem);
+      mem.emit('retrieved', key, results, args);
+      invokeIfExists(results, done);
+      return results;
+    } catch (e) {
+      if (_.isFunction(done)) done(e);
+      throw e;
+    }
   };
 }
 
@@ -176,7 +188,7 @@ function wrapDelete(memoizor, controller) {
       mem.emit('deleted', key, results, args);
     }
 
-    if (_.isFunction(done)) done(null, results);
+    invokeIfExists(results, done);
     return results;
   };
 }
@@ -191,7 +203,6 @@ function wrapDelete(memoizor, controller) {
 function wrapEmpty(memoizor, controller) {
   return (done) => {
     const mem = memoizor;
-
     mem.debug({ method: 'empty', function: mem.name });
     mem.emit('empty');
     mem.emit('clear');

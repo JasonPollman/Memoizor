@@ -39,37 +39,44 @@ export default class MemoizorCallback extends MemoizorPromise {
       let callback;
 
       (async () => {
-        const callbackIndex = _.isNumber(this.callbackIndex)
-          ? Math.min(this.callbackIndex, args.length)
-          : args.length - 1;
+        try {
+          const callbackIndex = _.isNumber(this.callbackIndex)
+            ? Math.min(this.callbackIndex, args.length)
+            : args.length - 1;
 
-        // Get the list of params with the callback removed.
-        const params = [...args];
-        callback = params.splice(callbackIndex, 1)[0];
+          // Get the list of params with the callback removed.
+          const params = [...args];
+          callback = params.splice(callbackIndex, 1)[0];
 
-        // Hmmm, use didn't provide a proper callback
-        // Process will hang...
-        if (!_.isFunction(callback)) params.push(callback);
+          // Hmmm, use didn't provide a proper callback
+          // Process will hang...
+          if (!_.isFunction(callback)) {
+            callback = _.noop;
+            params.push(callback);
+          }
 
-        // Look for cached value
-        const resolvedArguments = this.resolveArguments(params);
+          // Look for cached value
+          const resolvedArguments = this.resolveArguments(params);
 
-        const wrappedCallback = (...results) => {
-          if (results[0] instanceof Error) return callback(results[0]);
-          return this.save(results, resolvedArguments, null, true)
-            .then(() => callback(...results))
-            .catch(callback);
-        };
+          const wrappedCallback = (...results) => {
+            if (results[0] instanceof Error) return callback(results[0]);
+            return this.save(results, resolvedArguments, null, true)
+              .catch(callback)
+              .then(() => callback(...results));
+          };
 
-        // Cache hit
-        const cached = await this.get(resolvedArguments, null, true);
-        if (cached !== this.NOT_CACHED) return wrappedCallback(...cached);
-        params.splice(callbackIndex, 0, wrappedCallback);
+          // Cache hit
+          const cached = await this.get(resolvedArguments, null, true);
+          if (cached !== this.NOT_CACHED) return wrappedCallback(...cached);
+          params.splice(callbackIndex, 0, wrappedCallback);
 
         // No cache, execute the function and store the results
-        return this.target(...params);
-      })()
-      .catch(e => (_.isFunction(callback) ? callback(e) : process.nextTick(() => { throw e; })));
+          return this.target(...params);
+        } catch (e) {
+          callback(e);
+          throw e;
+        }
+      })();
     };
   }
 
@@ -81,9 +88,11 @@ export default class MemoizorCallback extends MemoizorPromise {
    * @memberof MemoizorCallback
    * @override
    */
-  key(args, done) {
+  async key(args, done) {
     const cb = _.isFunction(done) ? done : _.noop;
-    return super.key(args).then(key => cb(null, key)).catch(done);
+    const hash = super.key(args);
+    hash.then(key => cb(null, key)).catch(cb);
+    return await hash;
   }
 
   /**
@@ -104,7 +113,14 @@ export default class MemoizorCallback extends MemoizorPromise {
       this.onRetrieve(key, resolvedArguments, (err, cached) => {
         this.debug({ method: 'post retrieve', function: this.name, key, cached: cached !== this.NOT_CACHED });
         if (err) reject(err); else resolve(cached);
-        if (_.isFunction(done)) done(err, cached);
+
+        if (_.isFunction(done)) {
+          if (err) return done(err);
+          if (cached === this.NOT_CACHED) return done(null, this.NOT_CACHED);
+          return done(...cached);
+        }
+
+        return null;
       });
     });
   }
@@ -119,16 +135,20 @@ export default class MemoizorCallback extends MemoizorPromise {
    */
   async save(value, args, done, resolved = false) {
     let params = args;
+    let val = value;
     if (_.isArguments(params)) params = _.toArray(params);
 
     // We store all callback results as an array, as they can have multiple
     // arguments passed to the callback.
-    if (!Array.isArray(params)) params = [params];
+    if (!Array.isArray(val)) val = [null, val];
 
     const resolvedArguments = resolved ? params : this.resolveArguments(params);
     const key = await this.key(resolvedArguments);
-    await this.onSave(key, value, resolvedArguments, done);
-    return value;
+    await this.onSave(key, val, resolvedArguments, () => {
+      if (_.isFunction(done)) done(...val);
+    });
+
+    return val;
   }
 
   /**
@@ -151,7 +171,7 @@ export default class MemoizorCallback extends MemoizorPromise {
 
   /**
    * Empties all stored values for the memoized function associated with this Memoizor object.
-   * @param {function} done A callback for completion.
+   * @param {function=} done A callback for completion.
    * @returns {Memoizor} The current Memoizor instance.
    * @memberof MemorizrCallback
    */
@@ -169,7 +189,17 @@ export default class MemoizorCallback extends MemoizorPromise {
    * @override
    */
   async unmemoize(empty = false, done) {
-    if (empty) await this.empty(done);
-    return super.unmemoize();
+    let shouldEmpty = empty;
+    let complete = done;
+
+    if (_.isFunction(shouldEmpty) && !complete) {
+      complete = shouldEmpty;
+      shouldEmpty = false;
+    }
+
+    if (shouldEmpty) await this.empty();
+    const result = await super.unmemoize();
+
+    if (_.isFunction(complete)) complete(null, result);
   }
 }

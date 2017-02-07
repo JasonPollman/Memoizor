@@ -20,5 +20,6 @@ function calculate(total) {
 }
 
 fibonacci = memoizor(n => (n <= 1 ? 1 : fibonacci(n - 1) + fibonacci(n - 2)));
+
 calculate(N);
 console.log(`Total time (object): ${elapsed}ms`);
